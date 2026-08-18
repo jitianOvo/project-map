@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QCheckBox, QDialog, QFormLayout, QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout
+
+from .config import ICON_PATH
+
+class ProjectDialog(QDialog):
+    def __init__(self, name, meta, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("项目属性")
+        if ICON_PATH.exists():
+            self.setWindowIcon(QIcon(str(ICON_PATH)))
+        self.setMinimumWidth(420)
+        form = QFormLayout(self)
+        self.name = QLineEdit(name)
+        self.group = QLineEdit(meta.get("group", "默认项目"))
+        self.description = QLineEdit(meta.get("description", ""))
+        form.addRow("显示名称", self.name)
+        form.addRow("项目分组", self.group)
+        form.addRow("项目描述", self.description)
+        buttons = QHBoxLayout()
+        cancel = QPushButton("取消")
+        save = QPushButton("保存")
+        save.setObjectName("primaryButton")
+        save.setDefault(True)
+        cancel.clicked.connect(self.reject)
+        save.clicked.connect(self.accept)
+        self.name.returnPressed.connect(self.accept)
+        self.group.returnPressed.connect(self.accept)
+        self.description.returnPressed.connect(self.accept)
+        buttons.addStretch()
+        buttons.addWidget(cancel)
+        buttons.addWidget(save)
+        form.addRow(buttons)
+
+
+class NameDialog(QDialog):
+    def __init__(self, title, label, value="", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        if ICON_PATH.exists():
+            self.setWindowIcon(QIcon(str(ICON_PATH)))
+        self.setMinimumWidth(420)
+        form = QFormLayout(self)
+        self.value = QLineEdit(value)
+        self.value.selectAll()
+        form.addRow(label, self.value)
+        buttons = QHBoxLayout()
+        cancel = QPushButton("取消")
+        confirm = QPushButton("继续")
+        confirm.setObjectName("primaryButton")
+        confirm.setDefault(True)
+        cancel.clicked.connect(self.reject)
+        confirm.clicked.connect(self.accept)
+        self.value.returnPressed.connect(self.accept)
+        buttons.addStretch()
+        buttons.addWidget(cancel)
+        buttons.addWidget(confirm)
+        form.addRow(buttons)
+
+
+class FindReplaceDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("查找和替换")
+        self.setMinimumWidth(500)
+        self.setModal(False)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.find_edit = QLineEdit()
+        self.find_edit.setPlaceholderText("输入要查找的内容")
+        self.replace_edit = QLineEdit()
+        self.replace_edit.setPlaceholderText("输入替换后的内容")
+        form.addRow("查找内容", self.find_edit)
+        form.addRow("替换为", self.replace_edit)
+        layout.addLayout(form)
+        options = QHBoxLayout()
+        self.case_sensitive = QCheckBox("区分大小写")
+        self.whole_word = QCheckBox("全字匹配")
+        options.addWidget(self.case_sensitive)
+        options.addWidget(self.whole_word)
+        options.addStretch()
+        layout.addLayout(options)
+        buttons = QHBoxLayout()
+        self.find_button = QPushButton("查找下一个")
+        self.replace_button = QPushButton("替换")
+        self.replace_all_button = QPushButton("全部替换")
+        close_button = QPushButton("关闭")
+        close_button.clicked.connect(self.close)
+        buttons.addWidget(self.find_button)
+        buttons.addWidget(self.replace_button)
+        buttons.addWidget(self.replace_all_button)
+        buttons.addStretch()
+        buttons.addWidget(close_button)
+        layout.addLayout(buttons)
+        self.find_edit.returnPressed.connect(self.find_button.click)
+        self.setWindowIcon(QIcon(str(ICON_PATH)) if ICON_PATH.exists() else QIcon())
