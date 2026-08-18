@@ -1,0 +1,19 @@
+# 本地运行数据与个人内容
+Backups/
+Data/
+Media/
+build/
+__pycache__/
+*.pyc
+
+# Markdown 目录默认包含个人项目，只公开演示文件
+Markdown/*.md
+!Markdown/项目航图公开演示.md
+
+# PyInstaller 临时文件；公开发布的 exe 单独保留
+dist/*
+!dist/项目航图.exe
+
+# 本地开发文件
+.venv/
+*.log
