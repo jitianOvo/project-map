@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QRegularExpression, QTimer, QUrl, Qt
 from PySide6.QtGui import QAction, QColor, QCloseEvent, QDesktopServices, QIcon, QKeySequence, QTextCursor, QTextDocument
-from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit, QMessageBox
+from PySide6.QtWidgets import QApplication, QFileDialog, QDialog, QLineEdit, QMessageBox
 
 from ..config import BACKUP_DIR, DATA_DIR, ICON_PATH, MARKDOWN_DIR
 from ..dialogs import FindReplaceDialog, NameDialog, ProjectDialog
@@ -76,6 +76,7 @@ class ActionsMixin:
         path.write_text("# 新项目大纲\n\n## 待办事项\n\n- [ ] ", encoding="utf-8")
         self.metadata[path.name] = {"display_name": path.stem, "group": "默认项目", "description": ""}
         self.save_metadata()
+        self.current_path = path
         self.refresh_files()
 
     def edit_project(self):

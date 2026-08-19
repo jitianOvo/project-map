@@ -48,7 +48,7 @@ class NameDialog(QDialog):
         form.addRow(label, self.value)
         buttons = QHBoxLayout()
         cancel = QPushButton("取消")
-        confirm = QPushButton("继续")
+        confirm = QPushButton("确定")
         confirm.setObjectName("primaryButton")
         confirm.setDefault(True)
         cancel.clicked.connect(self.reject)
