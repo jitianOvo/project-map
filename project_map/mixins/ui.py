@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSettings, QSize, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QLineEdit, QListWidget, QMainWindow, QPushButton, QSplitter,
+    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QSplitter,
     QStatusBar, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeWidget,
     QVBoxLayout, QWidget, QMenu, QPlainTextEdit,
 )
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from ..config import ICON_PATH
 from ..editor import MarkdownEditor
 from ..preview import PreviewBrowser
+from ..project_list import ProjectListWidget
 
 class UiMixin:
 
@@ -86,15 +87,24 @@ class UiMixin:
         self.filter_menu.triggered.connect(self.set_project_filter)
         self.filter_button.setMenu(self.filter_menu)
         left_layout.addWidget(self.filter_button)
-        self.file_list = QListWidget()
-        self.file_list.setFocusPolicy(Qt.NoFocus)
+        self.file_list = ProjectListWidget()
         self.file_list.currentItemChanged.connect(self.select_file)
+        self.file_list.order_changed.connect(self.persist_project_order)
+        self.file_list.delete_requested.connect(self.delete_file)
+        self.file_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.file_list.customContextMenuRequested.connect(self.show_project_context_menu)
         left_layout.addWidget(self.file_list, 1)
         buttons = QHBoxLayout()
-        for label, handler in (("＋ 新建", self.new_file), ("项目属性", self.edit_project), ("删除", self.delete_file)):
+        for label, handler in (("＋ 新建", self.new_file), ("项目属性", self.edit_project)):
             button = QPushButton(label)
             button.clicked.connect(handler)
             buttons.addWidget(button)
+        self.pin_button = QPushButton("置顶")
+        self.pin_button.clicked.connect(self.toggle_project_pin)
+        buttons.addWidget(self.pin_button)
+        delete_button = QPushButton("删除")
+        delete_button.clicked.connect(self.delete_file)
+        buttons.addWidget(delete_button)
         left_layout.addLayout(buttons)
 
         center = QWidget()

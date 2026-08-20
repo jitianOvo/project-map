@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QRegularExpression, QTimer, QUrl, Qt
 from PySide6.QtGui import QAction, QColor, QCloseEvent, QDesktopServices, QIcon, QKeySequence, QTextCursor, QTextDocument
-from PySide6.QtWidgets import QApplication, QFileDialog, QDialog, QLineEdit, QMessageBox
+from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QDialog, QLineEdit, QMessageBox
 
 from ..config import BACKUP_DIR, DATA_DIR, ICON_PATH, MARKDOWN_DIR
 from ..dialogs import FindReplaceDialog, NameDialog, ProjectDialog
@@ -74,7 +74,13 @@ class ActionsMixin:
             self.show_notice("文件已存在", "这个名称已经被使用，请换一个名称。")
             return
         path.write_text("# 新项目大纲\n\n## 待办事项\n\n- [ ] ", encoding="utf-8")
-        self.metadata[path.name] = {"display_name": path.stem, "group": "默认项目", "description": ""}
+        self.metadata[path.name] = {
+            "display_name": path.stem,
+            "group": "默认项目",
+            "description": "",
+            "pinned": False,
+            "order": self.next_project_order(False),
+        }
         self.save_metadata()
         self.current_path = path
         self.refresh_files()
@@ -102,22 +108,40 @@ class ActionsMixin:
         self.refresh_files()
 
     def delete_file(self):
-        if not self.current_path or not self.maybe_save():
+        path = self.selected_project_path()
+        if not path or not self.maybe_save():
             return
         box = QMessageBox(self)
-        box.setWindowTitle("归档大纲")
-        box.setText(f"要将“{self.display_name(self.current_path)}”移动到备份目录吗？")
-        move_button = box.addButton("移入备份", QMessageBox.DestructiveRole)
-        box.addButton("暂不处理", QMessageBox.RejectRole)
+        box.setWindowTitle("删除项目大纲")
+        box.setText(f"要删除“{self.display_name(path)}”吗？")
+        box.setInformativeText("默认会移入备份目录；勾选永久删除后将直接删除原文件。")
+        permanent = QCheckBox("永久删除，不保留备份")
+        box.setCheckBox(permanent)
+        delete_button = box.addButton("移入备份", QMessageBox.DestructiveRole)
+        box.addButton("暂不删除", QMessageBox.RejectRole)
+        permanent.toggled.connect(lambda checked: delete_button.setText("永久删除" if checked else "移入备份"))
         box.exec()
-        if box.clickedButton() is not move_button:
+        if box.clickedButton() is not delete_button:
             return
+        self.remove_project_file(path, permanent.isChecked())
+
+    def remove_project_file(self, path, permanent=False):
+        path = Path(path)
+        display_name = self.display_name(path)
+        if str(path) in self.watcher.files():
+            self.watcher.removePath(str(path))
         stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        shutil.move(str(self.current_path), str(BACKUP_DIR / f"{self.current_path.stem}_{stamp}.md.deleted"))
-        self.metadata.pop(self.current_path.name, None)
+        if permanent:
+            path.unlink()
+            result = f"已永久删除：{display_name}"
+        else:
+            shutil.move(str(path), str(BACKUP_DIR / f"{path.stem}_{stamp}.md.deleted"))
+            result = f"已移入备份：{display_name}"
+        self.metadata.pop(path.name, None)
         self.save_metadata()
         self.current_path = None
         self.refresh_files()
+        self.statusBar().showMessage(result)
 
     def show_find_replace(self):
         if self.find_dialog is None:
@@ -212,8 +236,9 @@ class ActionsMixin:
             QToolBar::separator { background:#d9dee8; width:1px; margin:5px 7px; }
             QLineEdit, QComboBox, QPlainTextEdit, QTextBrowser, QTreeWidget, QListWidget { background:#ffffff; color:#1f2937; border:1px solid #e1e5ec; border-radius:9px; padding:7px; selection-background-color:#dbeafe; selection-color:#1e3a8a; }
             QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTreeWidget:focus, QListWidget:focus { border:1px solid #93b4f4; }
-            QListWidget::item { padding:9px; border-radius:8px; margin:2px 0; }
+            QListWidget::item { padding:9px; border-radius:8px; margin:2px 0; outline:0; }
             QListWidget::item:selected { background:#dbeafe; color:#1d4ed8; border-radius:8px; }
+            QListWidget::drop-indicator { background:#3b82f6; height:2px; }
             QPushButton, QToolButton#modeButton { background:#ffffff; color:#475569; border:1px solid #e1e5ec; border-radius:7px; padding:7px 11px; }
             QPushButton:hover, QToolButton#modeButton:hover { background:#eef4ff; color:#2563eb; border-color:#b7cdf8; }
             QToolButton#modeButton:checked { background:#dbeafe; color:#1d4ed8; border-color:#93b4f4; }
@@ -261,8 +286,9 @@ class ActionsMixin:
         QToolBar::separator { background:#2b3950; width:1px; margin:5px 7px; }
         QLineEdit, QComboBox, QPlainTextEdit, QTextBrowser, QTreeWidget, QListWidget { background:#111c2e; color:#e5e7eb; border:1px solid #263650; border-radius:9px; padding:7px; selection-background-color:#254b85; selection-color:#ffffff; }
         QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTreeWidget:focus, QListWidget:focus { border:1px solid #4777bd; }
-        QListWidget::item { padding:9px; border-radius:8px; margin:2px 0; }
+        QListWidget::item { padding:9px; border-radius:8px; margin:2px 0; outline:0; }
         QListWidget::item:selected { background:#274d83; color:#ffffff; border-radius:8px; }
+        QListWidget::drop-indicator { background:#60a5fa; height:2px; }
         QPushButton, QToolButton#modeButton { background:#18263c; color:#cbd5e1; border:1px solid #2b3c59; border-radius:7px; padding:7px 11px; }
         QPushButton:hover, QToolButton#modeButton:hover { background:#213655; color:#93c5fd; border-color:#4777bd; }
         QToolButton#modeButton:checked { background:#27466f; color:#bfdbfe; border-color:#5b8acb; }

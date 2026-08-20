@@ -5,7 +5,7 @@ import datetime as dt
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QListWidgetItem
+from PySide6.QtWidgets import QListWidgetItem, QMenu
 
 from ..config import MARKDOWN_DIR, PROJECTS_FILE
 
@@ -25,7 +25,21 @@ class ProjectsMixin:
         group = str(self.settings.value("project_filter", "全部项目"))
         if group and group != "全部项目":
             files = [p for p in files if self.metadata.get(p.name, {}).get("group", "默认项目") == group]
-        return sorted(files, key=lambda p: (not self.metadata.get(p.name, {}).get("pinned", False), p.name.casefold()))
+        return sorted(files, key=self.project_sort_key)
+
+    def project_sort_key(self, path):
+        meta = self.metadata.get(path.name, {})
+        order = meta.get("order")
+        order = order if isinstance(order, int) else 1_000_000_000
+        return (not meta.get("pinned", False), order, path.name.casefold())
+
+    def next_project_order(self, pinned=False):
+        orders = [
+            meta.get("order")
+            for meta in self.metadata.values()
+            if bool(meta.get("pinned", False)) == pinned and isinstance(meta.get("order"), int)
+        ]
+        return max(orders, default=-1) + 1
 
     def refresh_groups(self):
         groups = sorted({self.metadata.get(p.name, {}).get("group", "默认项目") for p in MARKDOWN_DIR.glob("*.md")})
@@ -61,13 +75,15 @@ class ProjectsMixin:
         self.file_list.clear()
         for path in files:
             meta = self.metadata.get(path.name, {})
-            prefix = "★ " if meta.get("favorite") else ""
+            prefix = "↑ " if meta.get("pinned") else ""
+            prefix += "★ " if meta.get("favorite") else ""
             item = QListWidgetItem(prefix + meta.get("display_name", path.stem))
             item.setData(Qt.UserRole, str(path))
             stamp = dt.datetime.fromtimestamp(path.stat().st_mtime).strftime("%m-%d %H:%M")
             text = path.read_text(encoding="utf-8", errors="ignore")
             done, total = text.count("- [x]") + text.count("- [X]"), text.count("- [")
-            item.setToolTip(f"{path.name}\n{meta.get('description', '')}\n任务：{done}/{total}\n修改：{stamp}")
+            pinned_text = "\n状态：已置顶" if meta.get("pinned") else ""
+            item.setToolTip(f"{path.name}\n{meta.get('description', '')}\n任务：{done}/{total}\n修改：{stamp}{pinned_text}")
             self.file_list.addItem(item)
         self.file_list.blockSignals(False)
         self.count_label.setText(f"{len(files)} 个项目")
@@ -81,6 +97,7 @@ class ProjectsMixin:
             if files:
                 self.file_list.setCurrentRow(0)
                 self.load_file(files[0])
+        self.update_pin_button()
 
     def filter_files(self, query):
         query = query.casefold().strip()
@@ -92,9 +109,107 @@ class ProjectsMixin:
 
     def select_file(self, current, _previous):
         if not current:
+            self.update_pin_button()
             return
         if self.maybe_save():
             self.load_file(Path(current.data(Qt.UserRole)))
+        elif self.current_path:
+            self.file_list.blockSignals(True)
+            for index in range(self.file_list.count()):
+                item = self.file_list.item(index)
+                if Path(item.data(Qt.UserRole)) == self.current_path:
+                    self.file_list.setCurrentItem(item)
+                    break
+            self.file_list.blockSignals(False)
+        self.update_pin_button()
+
+    def selected_project_path(self):
+        item = self.file_list.currentItem()
+        return Path(item.data(Qt.UserRole)) if item else self.current_path
+
+    def update_pin_button(self):
+        if not hasattr(self, "pin_button"):
+            return
+        path = self.selected_project_path()
+        pinned = bool(path and self.metadata.get(path.name, {}).get("pinned", False))
+        self.pin_button.setText("取消置顶" if pinned else "置顶")
+        self.pin_button.setEnabled(path is not None)
+
+    def toggle_project_pin(self, path=None):
+        path = Path(path) if path else self.selected_project_path()
+        if not path:
+            return
+        meta = self.metadata.setdefault(path.name, {})
+        pinned = not bool(meta.get("pinned", False))
+        meta["pinned"] = pinned
+        meta["order"] = -1
+        self.normalize_project_orders()
+        self.save_metadata()
+        self.current_path = path
+        self.refresh_files()
+        state = "已置顶" if pinned else "已取消置顶"
+        self.statusBar().showMessage(f"{state}：{self.display_name(path)}")
+
+    def normalize_project_orders(self):
+        paths = list(MARKDOWN_DIR.glob("*.md"))
+        for pinned in (True, False):
+            bucket = [path for path in paths if bool(self.metadata.get(path.name, {}).get("pinned", False)) == pinned]
+            bucket.sort(key=lambda path: (
+                self.metadata.get(path.name, {}).get("order")
+                if isinstance(self.metadata.get(path.name, {}).get("order"), int)
+                else 1_000_000_000,
+                path.name.casefold(),
+            ))
+            for order, path in enumerate(bucket):
+                self.metadata.setdefault(path.name, {})["order"] = order
+
+    def persist_project_order(self):
+        visible_order = [
+            Path(self.file_list.item(index).data(Qt.UserRole)).name
+            for index in range(self.file_list.count())
+            if not self.file_list.item(index).isHidden()
+        ]
+        all_paths = list(MARKDOWN_DIR.glob("*.md"))
+        for pinned in (True, False):
+            displayed = [name for name in visible_order if bool(self.metadata.get(name, {}).get("pinned", False)) == pinned]
+            if not displayed:
+                continue
+            bucket = [path.name for path in all_paths if bool(self.metadata.get(path.name, {}).get("pinned", False)) == pinned]
+            bucket.sort(key=lambda name: (
+                self.metadata.get(name, {}).get("order")
+                if isinstance(self.metadata.get(name, {}).get("order"), int)
+                else 1_000_000_000,
+                name.casefold(),
+            ))
+            displayed_set = set(displayed)
+            slots = [index for index, name in enumerate(bucket) if name in displayed_set]
+            for slot, name in zip(slots, displayed):
+                bucket[slot] = name
+            for order, name in enumerate(bucket):
+                self.metadata.setdefault(name, {})["order"] = order
+        self.save_metadata()
+        selected = self.selected_project_path()
+        if selected:
+            self.current_path = selected
+        self.refresh_files()
+        self.statusBar().showMessage("项目顺序已保存")
+
+    def show_project_context_menu(self, position):
+        item = self.file_list.itemAt(position)
+        if not item:
+            return
+        self.file_list.setCurrentItem(item)
+        path = Path(item.data(Qt.UserRole))
+        menu = QMenu(self.file_list)
+        pinned = bool(self.metadata.get(path.name, {}).get("pinned", False))
+        pin_action = menu.addAction("取消置顶" if pinned else "置顶")
+        pin_action.triggered.connect(lambda: self.toggle_project_pin(path))
+        menu.addSeparator()
+        properties_action = menu.addAction("项目属性")
+        properties_action.triggered.connect(self.edit_project)
+        delete_action = menu.addAction("删除项目")
+        delete_action.triggered.connect(self.delete_file)
+        menu.exec(self.file_list.viewport().mapToGlobal(position))
 
     def load_file(self, path):
         try:
