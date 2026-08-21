@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSettings, QSize, Qt
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtCore import QSettings, QSize, QUrl, Qt
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QSplitter,
     QStatusBar, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeWidget,
     QVBoxLayout, QWidget, QMenu, QPlainTextEdit,
 )
 
-from ..config import ICON_PATH
+from ..config import ICON_PATH, MARKDOWN_DIR
 from ..editor import MarkdownEditor
 from ..preview import PreviewBrowser
 from ..project_list import ProjectListWidget

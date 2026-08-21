@@ -1,7 +1,21 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QElapsedTimer, QPropertyAnimation, QTimer, Qt, Signal
-from PySide6.QtWidgets import QAbstractItemView, QGraphicsOpacityEffect, QListWidget
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QGraphicsOpacityEffect,
+    QListWidget,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+)
+
+
+class NoFocusFrameDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        clean_option = QStyleOptionViewItem(option)
+        clean_option.state &= ~QStyle.State_HasFocus
+        super().paint(painter, clean_option, index)
 
 
 class ProjectListWidget(QListWidget):
@@ -14,6 +28,7 @@ class ProjectListWidget(QListWidget):
         super().__init__(parent)
         self._press_timer = QElapsedTimer()
         self._drop_animation: QPropertyAnimation | None = None
+        self.setItemDelegate(NoFocusFrameDelegate(self))
         self.setFocusPolicy(Qt.StrongFocus)
         self.setDragEnabled(True)
         self.setAcceptDrops(True)

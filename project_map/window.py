@@ -30,6 +30,14 @@ class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, PanelsMi
         self.layout_timer = QTimer(self)
         self.layout_timer.setSingleShot(True)
         self.layout_timer.timeout.connect(self.save_layout)
+        self.auto_save_timer = QTimer(self)
+        self.auto_save_timer.setSingleShot(True)
+        self.auto_save_timer.setInterval(750)
+        self.auto_save_timer.timeout.connect(self.auto_save_file)
+        self.save_guard_timer = QTimer(self)
+        self.save_guard_timer.setSingleShot(True)
+        self.save_guard_timer.setInterval(1200)
+        self.save_guard_timer.timeout.connect(self.clear_save_guard)
         self.setWindowTitle("项目航图")
         if ICON_PATH.exists():
             self.setWindowIcon(QIcon(str(ICON_PATH)))
@@ -42,4 +50,3 @@ class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, PanelsMi
         self.watcher.directoryChanged.connect(lambda _: self.refresh_files())
         self.watcher.fileChanged.connect(self.external_file_changed)
         self.refresh_files()
-

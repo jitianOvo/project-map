@@ -15,10 +15,17 @@ from ..preview import ImageViewer
 
 class PreviewMixin:
 
+    def preview_base_dir(self):
+        if self.current_path and not self.is_local_project(self.current_path):
+            return self.current_path.parent
+        return APP_DIR
+
     def content_changed(self):
         if self.loading:
             return
         self.dirty = True
+        if hasattr(self, "auto_save_timer"):
+            self.auto_save_timer.start()
         self.file_title.setText(self.display_name(self.current_path) + " *") if self.current_path else None
         self.update_preview()
         self.update_sidebar()
@@ -41,7 +48,7 @@ class PreviewMixin:
         source = re.sub(r"(?m)^\s*---\s*$", divider, self.preview_markdown())
         html = markdown_lib.markdown(source, extensions=["extra", "tables", "fenced_code", "sane_lists", "nl2br"])
         html = self.scale_preview_images(html)
-        self.preview.document().setBaseUrl(QUrl.fromLocalFile(str(APP_DIR) + "/"))
+        self.preview.document().setBaseUrl(QUrl.fromLocalFile(str(self.preview_base_dir()) + "/"))
         self.preview.document().setHtml(f"""
         <style>
             body {{ color:{foreground}; font-family:'Microsoft YaHei UI'; font-size:{preview_size:.1f}pt; line-height:1.55; }}
@@ -65,8 +72,16 @@ class PreviewMixin:
 
         def replace_image(match):
             before, source, after = match.groups()
-            local_path = QUrl(source).toLocalFile() if source.startswith("file:") else str(APP_DIR / source.replace("/", "\\"))
-            image = QImage(local_path)
+            if source.startswith("file:"):
+                candidates = [Path(QUrl(source).toLocalFile())]
+            else:
+                source_path = Path(source.replace("/", "\\"))
+                candidates = [source_path] if source_path.is_absolute() else [
+                    self.preview_base_dir() / source_path,
+                    APP_DIR / source_path,
+                ]
+            local_path = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
+            image = QImage(str(local_path))
             if image.isNull():
                 return match.group(0)
             viewport_width = self.preview.viewport().width()
@@ -137,7 +152,7 @@ class PreviewMixin:
         lines = self.editor.toPlainText().splitlines()
         total = sum(line.strip().startswith("- [") for line in lines)
         done = sum(line.strip().lower().startswith("- [x]") for line in lines)
-        meta = self.metadata.get(self.current_path.name, {})
+        meta = self.project_meta(self.current_path)
         self.info.setText(f"项目：{self.display_name(self.current_path)}\n\n分组：{meta.get('group', '默认项目')}\n描述：{meta.get('description', '暂无描述')}\n\n完成度：{done}/{total} 个任务")
 
     def jump_to_heading(self, item, _column):

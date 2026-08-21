@@ -5,7 +5,14 @@ from pathlib import Path
 
 if getattr(sys, "frozen", False):
     _exe_dir = Path(sys.executable).resolve().parent
-    APP_DIR = _exe_dir.parent if _exe_dir.name.casefold() == "dist" else _exe_dir
+    _adjacent_markdown = _exe_dir / "Markdown"
+    _repository_markdown = _exe_dir.parent / "Markdown"
+    if _adjacent_markdown.exists():
+        APP_DIR = _exe_dir
+    elif _exe_dir.name.casefold() == "dist" and _repository_markdown.exists():
+        APP_DIR = _exe_dir.parent
+    else:
+        APP_DIR = _exe_dir
 else:
     APP_DIR = Path(__file__).resolve().parent.parent
 

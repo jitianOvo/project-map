@@ -5,9 +5,9 @@ import re
 import shutil
 from pathlib import Path
 
-from PySide6.QtCore import QRegularExpression, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QTextCharFormat, QTextCursor, QSyntaxHighlighter
-from PySide6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
+from PySide6.QtCore import QRegularExpression, QTimer, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QTextCharFormat, QTextCursor, QSyntaxHighlighter
+from PySide6.QtWidgets import QMenu, QPlainTextEdit, QTextEdit, QWidget
 
 from .config import MEDIA_DIR
 
@@ -90,8 +90,6 @@ class MarkdownEditor(QPlainTextEdit):
     def highlight_current_line(self):
         extra = []
         if not self.isReadOnly():
-            selection = QTextEdit.ExtraSelection() if False else None
-            from PySide6.QtWidgets import QTextEdit
             selection = QTextEdit.ExtraSelection()
             selection.format.setBackground(QColor("#eef3fb" if self.theme_name == "light" else "#17243a"))
             selection.format.setProperty(QTextCharFormat.FullWidthSelection, True)
