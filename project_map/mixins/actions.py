@@ -6,10 +6,11 @@ import shutil
 from pathlib import Path
 
 from PySide6.QtCore import QRegularExpression, QTimer, QUrl, Qt
-from PySide6.QtGui import QAction, QColor, QCloseEvent, QDesktopServices, QIcon, QKeySequence, QTextCursor, QTextDocument
+from PySide6.QtGui import QAction, QColor, QCloseEvent, QDesktopServices, QKeySequence, QTextCursor, QTextDocument
 from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QDialog, QLineEdit, QMessageBox
 
-from ..config import APP_DIR, BACKUP_DIR, DATA_DIR, ICON_PATH, MARKDOWN_DIR
+from ..appearance import apply_window_icon
+from ..config import APP_DIR, BACKUP_DIR, MARKDOWN_DIR
 from ..dialogs import FindReplaceDialog, NameDialog, ProjectDialog
 
 class ActionsMixin:
@@ -20,6 +21,7 @@ class ActionsMixin:
         if hasattr(self, "auto_save_timer") and self.auto_save_timer.isActive() and self.flush_auto_save():
             return True
         box = QMessageBox(self)
+        apply_window_icon(box)
         box.setWindowTitle("未保存修改")
         box.setText("当前大纲还有修改没有保存。\n要保存这些修改吗？")
         save = box.addButton("保存修改", QMessageBox.AcceptRole)
@@ -30,6 +32,7 @@ class ActionsMixin:
 
     def show_notice(self, title, text):
         box = QMessageBox(self)
+        apply_window_icon(box)
         box.setWindowTitle(title)
         box.setText(text)
         box.addButton("知道了", QMessageBox.AcceptRole)
@@ -93,9 +96,10 @@ class ActionsMixin:
             self.show_notice("文件已存在", "这个名称已经被使用，请换一个名称。")
             return
         path.write_text("# 新项目大纲\n\n## 待办事项\n\n- [ ] ", encoding="utf-8")
+        group = self.active_project_group()
         self.metadata[self.project_key(path)] = {
             "display_name": path.stem,
-            "group": "默认项目",
+            "group": group,
             "description": "",
             "pinned": False,
             "order": self.next_project_order(False),
@@ -108,10 +112,11 @@ class ActionsMixin:
         if not self.current_path:
             return
         meta = self.project_meta(self.current_path, create=True)
-        dialog = ProjectDialog(self.display_name(self.current_path), meta, self)
+        dialog = ProjectDialog(self.display_name(self.current_path), meta, self.project_groups(), self)
         if dialog.exec() != QDialog.Accepted:
             return
-        meta.update({"display_name": dialog.name.text().strip() or self.current_path.stem, "group": dialog.group.text().strip() or "默认项目", "description": dialog.description.text().strip()})
+        group = self.register_project_group(dialog.group.currentText())
+        meta.update({"display_name": dialog.name.text().strip() or self.current_path.stem, "group": group, "description": dialog.description.text().strip()})
         self.save_metadata()
         self.refresh_files()
 
@@ -127,10 +132,11 @@ class ActionsMixin:
                 self.statusBar().showMessage(f"项目已经在项目库中：{path.name}")
                 return
         key = self.external_project_key(path)
+        group = self.active_project_group()
         self.metadata[key] = {
             "source_path": str(path),
             "display_name": path.stem,
-            "group": "默认项目",
+            "group": group,
             "description": "",
             "pinned": False,
             "order": self.next_project_order(False),
@@ -145,14 +151,18 @@ class ActionsMixin:
         if not path or not self.maybe_save():
             return
         external = not self.is_local_project(path)
+        absolute_path = path.resolve(strict=False)
         box = QMessageBox(self)
+        apply_window_icon(box)
         box.setWindowTitle("删除项目大纲")
         box.setText(f"要删除“{self.display_name(path)}”吗？")
         box.setInformativeText(
-            "默认只从项目库移除链接，不改动外部原文件；勾选后将删除外部原文件。"
+            f"文件完整路径：\n{absolute_path}\n\n"
+            + ("默认只从项目库移除链接，不改动外部原文件；勾选后将删除外部原文件。"
             if external else
-            "默认会移入备份目录；勾选永久删除后将直接删除原文件。"
+            "默认会移入备份目录；勾选永久删除后将直接删除原文件。")
         )
+        box.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         permanent = QCheckBox("同时永久删除外部原文件" if external else "永久删除，不保留备份")
         box.setCheckBox(permanent)
         delete_button = box.addButton("移出项目库" if external else "移入备份", QMessageBox.DestructiveRole)
@@ -294,6 +304,7 @@ class ActionsMixin:
             QToolButton#filterButton { background:#ffffff; color:#475569; border:1px solid #e1e5ec; border-radius:10px; padding:8px 11px; text-align:left; }
             QToolButton#filterButton:hover { background:#eef4ff; color:#2563eb; border-color:#b7cdf8; }
             QMenu { background:#ffffff; color:#1f2937; border:1px solid #e1e5ec; border-radius:9px; padding:6px; }
+            QMenu#filterMenu { border:0; border-radius:11px; }
             QMenu::item { padding:8px 28px 8px 12px; border-radius:6px; }
             QMenu::item:selected { background:#e8eefb; color:#1d4ed8; }
             QToolButton#formatButton { background:transparent; color:#475569; border:0; border-radius:7px; min-width:30px; min-height:28px; padding:3px 6px; font-weight:600; }
@@ -344,6 +355,7 @@ class ActionsMixin:
         QToolButton#filterButton { background:#18263c; color:#cbd5e1; border:1px solid #2b3c59; border-radius:10px; padding:8px 11px; text-align:left; }
         QToolButton#filterButton:hover { background:#213655; color:#93c5fd; border-color:#4777bd; }
         QMenu { background:#162238; color:#e5e7eb; border:1px solid #2b3c59; border-radius:9px; padding:6px; }
+        QMenu#filterMenu { border:0; border-radius:11px; }
         QMenu::item { padding:8px 28px 8px 12px; border-radius:6px; }
         QMenu::item:selected { background:#243b60; color:#bfdbfe; }
         QToolButton#formatButton { background:transparent; color:#cbd5e1; border:0; border-radius:7px; min-width:30px; min-height:28px; padding:3px 6px; font-weight:600; }

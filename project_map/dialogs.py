@@ -1,20 +1,24 @@
 from __future__ import annotations
 
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QCheckBox, QDialog, QFormLayout, QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout
 
-from .config import ICON_PATH
+from .appearance import apply_window_icon
 
 class ProjectDialog(QDialog):
-    def __init__(self, name, meta, parent=None):
+    def __init__(self, name, meta, groups=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("项目属性")
-        if ICON_PATH.exists():
-            self.setWindowIcon(QIcon(str(ICON_PATH)))
+        apply_window_icon(self)
         self.setMinimumWidth(420)
         form = QFormLayout(self)
         self.name = QLineEdit(name)
-        self.group = QLineEdit(meta.get("group", "默认项目"))
+        self.group = QComboBox()
+        self.group.setEditable(True)
+        self.group.addItems(groups or ["默认项目"])
+        current_group = meta.get("group", "默认项目")
+        if self.group.findText(current_group) < 0:
+            self.group.addItem(current_group)
+        self.group.setCurrentText(current_group)
         self.description = QLineEdit(meta.get("description", ""))
         form.addRow("显示名称", self.name)
         form.addRow("项目分组", self.group)
@@ -27,7 +31,7 @@ class ProjectDialog(QDialog):
         cancel.clicked.connect(self.reject)
         save.clicked.connect(self.accept)
         self.name.returnPressed.connect(self.accept)
-        self.group.returnPressed.connect(self.accept)
+        self.group.lineEdit().returnPressed.connect(self.accept)
         self.description.returnPressed.connect(self.accept)
         buttons.addStretch()
         buttons.addWidget(cancel)
@@ -39,8 +43,7 @@ class NameDialog(QDialog):
     def __init__(self, title, label, value="", parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
-        if ICON_PATH.exists():
-            self.setWindowIcon(QIcon(str(ICON_PATH)))
+        apply_window_icon(self)
         self.setMinimumWidth(420)
         form = QFormLayout(self)
         self.value = QLineEdit(value)
@@ -64,6 +67,7 @@ class FindReplaceDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("查找和替换")
+        apply_window_icon(self)
         self.setMinimumWidth(500)
         self.setModal(False)
         layout = QVBoxLayout(self)
@@ -95,4 +99,3 @@ class FindReplaceDialog(QDialog):
         buttons.addWidget(close_button)
         layout.addLayout(buttons)
         self.find_edit.returnPressed.connect(self.find_button.click)
-        self.setWindowIcon(QIcon(str(ICON_PATH)) if ICON_PATH.exists() else QIcon())

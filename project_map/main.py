@@ -3,23 +3,25 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from .config import ICON_PATH
+from .appearance import configure_windows_app_id, load_app_icon
 from .single_instance import SingleInstance
 from .window import MainWindow
 
 
 def main():
+    configure_windows_app_id()
     app = QApplication(sys.argv)
     app.setApplicationName("项目航图")
+    app.setApplicationDisplayName("项目航图")
     app.setStyle("Fusion")
+    icon = load_app_icon()
+    if not icon.isNull():
+        app.setWindowIcon(icon)
     instance = SingleInstance(parent=app)
     if not instance.is_primary:
         return 0
-    if ICON_PATH.exists():
-        app.setWindowIcon(QIcon(str(ICON_PATH)))
     window = MainWindow()
 
     def activate_window():

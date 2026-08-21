@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QSettings, QSize, QUrl, Qt
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
+from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QSplitter,
     QStatusBar, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeWidget,
     QVBoxLayout, QWidget, QMenu, QPlainTextEdit,
 )
 
-from ..config import ICON_PATH, MARKDOWN_DIR
+from ..config import MARKDOWN_DIR
 from ..editor import MarkdownEditor
 from ..preview import PreviewBrowser
 from ..project_list import ProjectListWidget
@@ -83,8 +83,11 @@ class UiMixin:
         self.filter_button = QToolButton()
         self.filter_button.setObjectName("filterButton")
         self.filter_button.setPopupMode(QToolButton.InstantPopup)
+        self.filter_button.setToolTip("筛选项目分组；菜单底部可新建或删除分组")
         self.filter_menu = QMenu(self)
-        self.filter_menu.triggered.connect(self.set_project_filter)
+        self.filter_menu.setObjectName("filterMenu")
+        self.filter_menu.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.filter_menu.setWindowFlag(Qt.NoDropShadowWindowHint, True)
         self.filter_button.setMenu(self.filter_menu)
         left_layout.addWidget(self.filter_button)
         self.file_list = ProjectListWidget()

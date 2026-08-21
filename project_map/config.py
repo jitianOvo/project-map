@@ -16,9 +16,17 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent.parent
 
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+
 MARKDOWN_DIR = APP_DIR / "Markdown"
 DATA_DIR = APP_DIR / "Data"
 BACKUP_DIR = APP_DIR / "Backups"
 MEDIA_DIR = APP_DIR / "Media"
 PROJECTS_FILE = DATA_DIR / "projects.json"
-ICON_PATH = APP_DIR / "assets" / "app_icon.svg"
+_icon_candidates = (
+    RESOURCE_DIR / "assets" / "app_icon.ico",
+    RESOURCE_DIR / "assets" / "app_icon.svg",
+    APP_DIR / "assets" / "app_icon.ico",
+    APP_DIR / "assets" / "app_icon.svg",
+)
+ICON_PATH = next((path for path in _icon_candidates if path.exists()), _icon_candidates[0])
