@@ -5,11 +5,12 @@ from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QSplitter,
     QStatusBar, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeWidget,
-    QVBoxLayout, QWidget, QMenu, QPlainTextEdit,
+    QVBoxLayout, QWidget, QPlainTextEdit,
 )
 
 from ..config import MARKDOWN_DIR
 from ..editor import MarkdownEditor
+from ..menus import RoundedMenu
 from ..preview import PreviewBrowser
 from ..project_list import ProjectListWidget
 
@@ -50,6 +51,10 @@ class UiMixin:
         open_action.setToolTip("打开数据目录  ·  Ctrl+O")
         open_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(MARKDOWN_DIR))))
         toolbar.addAction(open_action)
+        media_action = QAction("图片缓存", self)
+        media_action.setToolTip("管理默认与附加 Media 图片缓存目录")
+        media_action.triggered.connect(self.show_media_folders)
+        toolbar.addAction(media_action)
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -84,10 +89,8 @@ class UiMixin:
         self.filter_button.setObjectName("filterButton")
         self.filter_button.setPopupMode(QToolButton.InstantPopup)
         self.filter_button.setToolTip("筛选项目分组；菜单底部可新建或删除分组")
-        self.filter_menu = QMenu(self)
+        self.filter_menu = RoundedMenu(self)
         self.filter_menu.setObjectName("filterMenu")
-        self.filter_menu.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.filter_menu.setWindowFlag(Qt.NoDropShadowWindowHint, True)
         self.filter_button.setMenu(self.filter_menu)
         left_layout.addWidget(self.filter_button)
         self.file_list = ProjectListWidget()
@@ -171,7 +174,7 @@ class UiMixin:
         self.wrap_button.setText("↔  自动换行")
         self.wrap_button.setPopupMode(QToolButton.InstantPopup)
         self.wrap_button.setToolTip("选择编辑栏或预览栏的自动换行设置")
-        self.wrap_menu = QMenu(self)
+        self.wrap_menu = RoundedMenu(self)
         self.editor_wrap_action = self.wrap_menu.addAction("编辑栏启用")
         self.editor_wrap_action.setCheckable(True)
         self.preview_wrap_action = self.wrap_menu.addAction("预览栏启用")

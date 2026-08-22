@@ -9,13 +9,14 @@ from .appearance import apply_window_icon
 from .config import BACKUP_DIR, DATA_DIR, MARKDOWN_DIR, MEDIA_DIR
 from .mixins.actions import ActionsMixin
 from .mixins.formatting import FormattingMixin
+from .mixins.media import MediaMixin
 from .mixins.panels import PanelsMixin
 from .mixins.preview import PreviewMixin
 from .mixins.projects import ProjectsMixin
 from .mixins.ui import UiMixin
 
 
-class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, PanelsMixin, ActionsMixin, QMainWindow):
+class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, MediaMixin, PanelsMixin, ActionsMixin, QMainWindow):
     def __init__(self):
         super().__init__()
         for directory in (MARKDOWN_DIR, DATA_DIR, BACKUP_DIR, MEDIA_DIR):

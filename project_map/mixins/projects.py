@@ -3,15 +3,17 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QTextCursor
-from PySide6.QtWidgets import QDialog, QListWidgetItem, QMenu, QMessageBox
+from PySide6.QtCore import QDir, QProcess, QTimer, QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QTextCursor
+from PySide6.QtWidgets import QDialog, QListWidgetItem, QMessageBox
 
 from ..appearance import apply_window_icon
 from ..config import MARKDOWN_DIR, PROJECTS_FILE
 from ..dialogs import NameDialog
+from ..menus import RoundedMenu
 
 
 class ProjectsMixin:
@@ -422,14 +424,18 @@ class ProjectsMixin:
             return
         self.file_list.setCurrentItem(item)
         path = Path(item.data(Qt.UserRole))
-        menu = QMenu(self.file_list)
+        menu = RoundedMenu(self.file_list)
         pinned = bool(self.project_meta(path).get("pinned", False))
         pin_action = menu.addAction("取消置顶" if pinned else "置顶")
         pin_action.triggered.connect(lambda: self.toggle_project_pin(path))
         menu.addSeparator()
         properties_action = menu.addAction("项目属性")
         properties_action.triggered.connect(self.edit_project)
-        group_menu = menu.addMenu("归入分组")
+        open_location_action = menu.addAction("打开所在位置")
+        open_location_action.triggered.connect(lambda: self.open_project_location(path))
+        group_menu = RoundedMenu(self.file_list)
+        group_menu.setTitle("归入分组")
+        menu.addMenu(group_menu)
         current_group = self.project_meta(path).get("group", self.DEFAULT_GROUP)
         for group in self.project_groups():
             action = group_menu.addAction(group)
@@ -439,9 +445,30 @@ class ProjectsMixin:
         group_menu.addSeparator()
         create_group_action = group_menu.addAction("＋ 新建分组…")
         create_group_action.triggered.connect(lambda: self.create_project_group(path))
+        media_action = menu.addAction("图片缓存设置…")
+        media_action.triggered.connect(self.show_media_folders)
+        menu.addSeparator()
         delete_action = menu.addAction("删除项目")
         delete_action.triggered.connect(self.delete_file)
         menu.exec(self.file_list.viewport().mapToGlobal(position))
+
+    def open_project_location(self, path=None):
+        path = Path(path) if path else self.selected_project_path()
+        if not path:
+            return
+        absolute_path = path.resolve(strict=False)
+        opened = False
+        if sys.platform == "win32":
+            result = QProcess.startDetached(
+                "explorer.exe",
+                ["/select,", QDir.toNativeSeparators(str(absolute_path))],
+            )
+            opened = result[0] if isinstance(result, tuple) else bool(result)
+        if not opened:
+            opened = QDesktopServices.openUrl(QUrl.fromLocalFile(str(absolute_path.parent)))
+        self.statusBar().showMessage(
+            f"已打开所在位置：{absolute_path.parent}" if opened else f"打开所在位置失败：{absolute_path.parent}"
+        )
 
     def save_project_view_state(self, path=None):
         path = Path(path or self.current_path) if path or self.current_path else None

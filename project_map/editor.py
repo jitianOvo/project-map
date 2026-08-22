@@ -7,9 +7,10 @@ from pathlib import Path
 
 from PySide6.QtCore import QRegularExpression, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QTextCharFormat, QTextCursor, QSyntaxHighlighter
-from PySide6.QtWidgets import QMenu, QPlainTextEdit, QTextEdit, QWidget
+from PySide6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 
 from .config import MEDIA_DIR
+from .menus import RoundedMenu
 
 class LineNumberArea(QWidget):
     def __init__(self, editor):
@@ -104,7 +105,7 @@ class MarkdownEditor(QPlainTextEdit):
         self.line_numbers.update()
 
     def contextMenuEvent(self, event):
-        menu = QMenu(self)
+        menu = RoundedMenu(self)
         undo = menu.addAction("撤销")
         undo.setShortcut(QKeySequence.Undo)
         undo.setEnabled(self.document().isUndoAvailable())

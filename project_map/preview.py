@@ -4,15 +4,16 @@ from pathlib import Path
 
 from PySide6.QtCore import QUrl, Qt, Signal, QSize
 from PySide6.QtGui import QDesktopServices, QPixmap
-from PySide6.QtWidgets import QDialog, QLabel, QMenu, QScrollArea, QTextBrowser, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QLabel, QScrollArea, QTextBrowser, QVBoxLayout
 
 from .appearance import apply_window_icon
+from .menus import RoundedMenu
 
 class PreviewBrowser(QTextBrowser):
     """预览区使用中文右键菜单，避免 Qt 原生英文菜单混入界面。"""
 
     def contextMenuEvent(self, event):
-        menu = QMenu(self)
+        menu = RoundedMenu(self)
         cursor = self.textCursor()
         copy_action = menu.addAction("复制")
         copy_action.setEnabled(cursor.hasSelection())

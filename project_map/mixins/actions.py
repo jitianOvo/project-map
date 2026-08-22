@@ -282,6 +282,7 @@ class ActionsMixin:
 
     def apply_theme(self, theme):
         self.settings.setValue("theme", theme)
+        QApplication.instance().setProperty("theme", theme)
         QApplication.instance().setStyleSheet(self.stylesheet(theme))
         self.editor.set_theme(theme)
         self.update_preview()
@@ -303,8 +304,7 @@ class ActionsMixin:
             QToolButton#modeButton:checked { background:#dbeafe; color:#1d4ed8; border-color:#93b4f4; }
             QToolButton#filterButton { background:#ffffff; color:#475569; border:1px solid #e1e5ec; border-radius:10px; padding:8px 11px; text-align:left; }
             QToolButton#filterButton:hover { background:#eef4ff; color:#2563eb; border-color:#b7cdf8; }
-            QMenu { background:#ffffff; color:#1f2937; border:1px solid #e1e5ec; border-radius:9px; padding:6px; }
-            QMenu#filterMenu { border:0; border-radius:11px; }
+            QMenu { background:transparent; color:#1f2937; border:0; padding:6px; }
             QMenu::item { padding:8px 28px 8px 12px; border-radius:6px; }
             QMenu::item:selected { background:#e8eefb; color:#1d4ed8; }
             QToolButton#formatButton { background:transparent; color:#475569; border:0; border-radius:7px; min-width:30px; min-height:28px; padding:3px 6px; font-weight:600; }
@@ -354,8 +354,7 @@ class ActionsMixin:
         QToolButton#modeButton:checked { background:#27466f; color:#bfdbfe; border-color:#5b8acb; }
         QToolButton#filterButton { background:#18263c; color:#cbd5e1; border:1px solid #2b3c59; border-radius:10px; padding:8px 11px; text-align:left; }
         QToolButton#filterButton:hover { background:#213655; color:#93c5fd; border-color:#4777bd; }
-        QMenu { background:#162238; color:#e5e7eb; border:1px solid #2b3c59; border-radius:9px; padding:6px; }
-        QMenu#filterMenu { border:0; border-radius:11px; }
+        QMenu { background:transparent; color:#e5e7eb; border:0; padding:6px; }
         QMenu::item { padding:8px 28px 8px 12px; border-radius:6px; }
         QMenu::item:selected { background:#243b60; color:#bfdbfe; }
         QToolButton#formatButton { background:transparent; color:#cbd5e1; border:0; border-radius:7px; min-width:30px; min-height:28px; padding:3px 6px; font-weight:600; }

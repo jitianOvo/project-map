@@ -72,15 +72,9 @@ class PreviewMixin:
 
         def replace_image(match):
             before, source, after = match.groups()
-            if source.startswith("file:"):
-                candidates = [Path(QUrl(source).toLocalFile())]
-            else:
-                source_path = Path(source.replace("/", "\\"))
-                candidates = [source_path] if source_path.is_absolute() else [
-                    self.preview_base_dir() / source_path,
-                    APP_DIR / source_path,
-                ]
-            local_path = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
+            local_path = self.resolve_media_source(source, self.preview_base_dir())
+            if local_path is None:
+                return match.group(0)
             image = QImage(str(local_path))
             if image.isNull():
                 return match.group(0)
@@ -95,7 +89,8 @@ class PreviewMixin:
             height = max(1, round(image.height() * width / image.width()))
             cleaned = re.sub(r"\sstyle=[\"'][^\"']*[\"']", "", before + after, flags=re.IGNORECASE)
             cleaned = re.sub(r"/\s*$", "", cleaned).strip()
-            return f'<img {cleaned} src="{html.escape(source, quote=True)}" width="{width}" height="{height}">'
+            resolved_source = QUrl.fromLocalFile(str(local_path.resolve(strict=False))).toString()
+            return f'<img {cleaned} src="{html.escape(resolved_source, quote=True)}" width="{width}" height="{height}">'
 
         return image_pattern.sub(replace_image, rendered_html)
 
