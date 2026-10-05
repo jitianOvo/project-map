@@ -56,7 +56,7 @@ class ProjectListWidget(QListWidget):
         after = [self.item(index).data(Qt.UserRole) for index in range(self.count())]
         if before != after:
             self._animate_drop_settle()
-            QTimer.singleShot(0, self.order_changed.emit)
+            QTimer.singleShot(0, self, self.order_changed.emit)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Delete and event.modifiers() == Qt.NoModifier and self.currentItem():

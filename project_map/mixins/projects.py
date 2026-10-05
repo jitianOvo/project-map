@@ -14,6 +14,7 @@ from ..appearance import apply_window_icon
 from ..config import MARKDOWN_DIR, PROJECTS_FILE
 from ..dialogs import NameDialog
 from ..menus import RoundedMenu
+from ..editor_workflow import PRIORITIES, priority_icon
 
 
 class ProjectsMixin:
@@ -271,6 +272,8 @@ class ProjectsMixin:
             display_name = meta.get("display_name", path.stem)
             disambiguation = f"  ·  {path.resolve(strict=False).parent}" if display_counts[display_name.casefold()] > 1 else ""
             item = QListWidgetItem(prefix + display_name + disambiguation)
+            if meta.get("priority") in PRIORITIES:
+                item.setIcon(priority_icon(meta["priority"]))
             item.setData(Qt.UserRole, str(path))
             item.setData(Qt.UserRole + 1, self.project_key(path))
             stamp = dt.datetime.fromtimestamp(path.stat().st_mtime).strftime("%m-%d %H:%M")
@@ -281,6 +284,8 @@ class ProjectsMixin:
                 states.append("已置顶")
             if not self.is_local_project(path):
                 states.append("外部导入")
+            if meta.get("priority") in PRIORITIES:
+                states.append(PRIORITIES[meta["priority"]][0])
             state_text = f"\n状态：{' / '.join(states)}" if states else ""
             item.setToolTip(f"{path}\n{meta.get('description', '')}\n任务：{done}/{total}\n修改：{stamp}{state_text}")
             self.file_list.addItem(item)
@@ -355,6 +360,8 @@ class ProjectsMixin:
         pinned = bool(path and self.project_meta(path).get("pinned", False))
         self.pin_button.setText("取消置顶" if pinned else "置顶")
         self.pin_button.setEnabled(path is not None)
+        if hasattr(self, "open_project_action"):
+            self.open_project_action.setVisible(bool(path and self.project_meta(path).get("project_path", "").strip()))
 
     def toggle_project_pin(self, path=None):
         path = Path(path) if path else self.selected_project_path()
@@ -433,6 +440,18 @@ class ProjectsMixin:
         properties_action.triggered.connect(self.edit_project)
         open_location_action = menu.addAction("打开所在位置")
         open_location_action.triggered.connect(lambda: self.open_project_location(path))
+        if self.project_meta(path).get("project_path", "").strip():
+            menu.addAction("打开项目位置", lambda: self.open_associated_project(path))
+        priority_menu = RoundedMenu(menu)
+        priority_menu.setTitle("项目优先级")
+        menu.addMenu(priority_menu)
+        for key, (label, _color) in PRIORITIES.items():
+            action = priority_menu.addAction(priority_icon(key), label)
+            action.setCheckable(True)
+            action.setChecked(self.project_meta(path).get("priority") == key)
+            action.triggered.connect(lambda _checked=False, value=key: self.set_project_priority(path, value))
+        priority_menu.addSeparator()
+        priority_menu.addAction("清除优先级", lambda: self.set_project_priority(path, None))
         group_menu = RoundedMenu(self.file_list)
         group_menu.setTitle("归入分组")
         menu.addMenu(group_menu)
@@ -451,6 +470,32 @@ class ProjectsMixin:
         delete_action = menu.addAction("删除项目")
         delete_action.triggered.connect(self.delete_file)
         menu.exec(self.file_list.viewport().mapToGlobal(position))
+
+    def set_project_priority(self, path, priority):
+        meta = self.project_meta(path, create=True)
+        if priority:
+            meta["priority"] = priority
+        else:
+            meta.pop("priority", None)
+        self.save_metadata()
+        self.refresh_files()
+
+    def open_associated_project(self, path=None):
+        path = Path(path) if path else self.selected_project_path()
+        if not path:
+            return
+        target = self.project_meta(path).get("project_path", "").strip()
+        if not target:
+            return
+        location = Path(target).expanduser()
+        if not location.is_absolute():
+            location = path.parent / location
+        if location.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(location.resolve())))
+        elif location.is_file():
+            self.open_project_location(location)
+        else:
+            self.show_notice("项目位置不存在", str(location.resolve(strict=False)))
 
     def open_project_location(self, path=None):
         path = Path(path) if path else self.selected_project_path()
@@ -506,7 +551,7 @@ class ProjectsMixin:
             or (preview_vertical and self.preview.verticalScrollBar().maximum() == 0)
         )
         if needs_retry and attempt < 6:
-            QTimer.singleShot(35, lambda: self.restore_project_view_state(path, attempt + 1))
+            QTimer.singleShot(35, self, lambda: self.restore_project_view_state(path, attempt + 1))
 
     def load_file(self, path):
         path = Path(path)
@@ -536,7 +581,7 @@ class ProjectsMixin:
         self.statusBar().showMessage(f"已打开：{path.name}")
         if str(path) not in self.watcher.files():
             self.watcher.addPath(str(path))
-        QTimer.singleShot(0, lambda: self.restore_project_view_state(path))
+        QTimer.singleShot(0, self, lambda: self.restore_project_view_state(path))
 
     def display_name(self, path):
         return str(self.project_meta(path).get("display_name") or Path(path).stem)

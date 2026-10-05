@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QDialog, QLi
 
 from ..appearance import apply_window_icon
 from ..config import APP_DIR, BACKUP_DIR, MARKDOWN_DIR
-from ..dialogs import FindReplaceDialog, NameDialog, ProjectDialog
+from ..dialogs import FindReplaceDialog, NewProjectDialog, ProjectDialog
 
 class ActionsMixin:
 
@@ -86,7 +86,7 @@ class ActionsMixin:
     def new_file(self):
         if not self.maybe_save():
             return
-        dialog = NameDialog("新建项目大纲", "文件名", "新项目大纲", self)
+        dialog = NewProjectDialog(self)
         if dialog.exec() != QDialog.Accepted or not dialog.value.text().strip():
             return
         name = dialog.value.text()
@@ -101,6 +101,7 @@ class ActionsMixin:
             "display_name": path.stem,
             "group": group,
             "description": "",
+            "project_path": dialog.project_path.text().strip(),
             "pinned": False,
             "order": self.next_project_order(False),
         }
@@ -116,7 +117,7 @@ class ActionsMixin:
         if dialog.exec() != QDialog.Accepted:
             return
         group = self.register_project_group(dialog.group.currentText())
-        meta.update({"display_name": dialog.name.text().strip() or self.current_path.stem, "group": group, "description": dialog.description.text().strip()})
+        meta.update({"display_name": dialog.name.text().strip() or self.current_path.stem, "group": group, "description": dialog.description.text().strip(), "project_path": dialog.project_path.text().strip()})
         self.save_metadata()
         self.refresh_files()
 
@@ -310,8 +311,7 @@ class ActionsMixin:
             QToolButton#formatButton { background:transparent; color:#475569; border:0; border-radius:7px; min-width:30px; min-height:28px; padding:3px 6px; font-weight:600; }
             QToolButton#formatButton:hover { background:#e8eefb; color:#1d4ed8; }
             QToolButton#formatButton:pressed { background:#dbeafe; }
-            QToolBar#markdownBar { background:#ffffff; border:1px solid #e1e5ec; border-radius:9px; padding:3px 6px; margin:4px 0 8px; }
-            QToolBar#markdownBar::separator { background:#e5e7eb; width:1px; margin:4px 6px; }
+            QWidget#markdownBar { background:#ffffff; border:1px solid #e1e5ec; border-radius:9px; }
             QTabWidget::pane { border:0; }
             QTabBar::tab { color:#64748b; padding:8px 12px; border:0; }
             QTabBar::tab:selected { color:#2563eb; border-bottom:2px solid #3b82f6; }
@@ -360,8 +360,7 @@ class ActionsMixin:
         QToolButton#formatButton { background:transparent; color:#cbd5e1; border:0; border-radius:7px; min-width:30px; min-height:28px; padding:3px 6px; font-weight:600; }
         QToolButton#formatButton:hover { background:#243653; color:#93c5fd; }
         QToolButton#formatButton:pressed { background:#2d4d7b; }
-        QToolBar#markdownBar { background:#162238; border:1px solid #293b59; border-radius:9px; padding:3px 6px; margin:4px 0 8px; }
-        QToolBar#markdownBar::separator { background:#2f405d; width:1px; margin:4px 6px; }
+        QWidget#markdownBar { background:#162238; border:1px solid #293b59; border-radius:9px; }
         QTabWidget::pane { border:0; }
         QTabBar::tab { color:#8293aa; padding:8px 12px; border:0; }
         QTabBar::tab:selected { color:#93c5fd; border-bottom:2px solid #60a5fa; }
@@ -397,7 +396,7 @@ class ActionsMixin:
                 self.watcher.addPath(str(path))
             return
         if self.same_path(path, self.current_path) and not self.dirty and path.exists():
-            QTimer.singleShot(150, lambda: self.load_file(path))
+            QTimer.singleShot(150, self, lambda: self.load_file(path))
         else:
             self.refresh_files()
 

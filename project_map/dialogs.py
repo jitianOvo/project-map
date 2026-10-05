@@ -30,6 +30,7 @@ class ProjectDialog(QDialog):
         form.addRow("显示名称", self.name)
         form.addRow("项目分组", self.group)
         form.addRow("项目描述", self.description)
+        self.project_path = add_project_path_field(form, meta.get("project_path", ""), self)
         buttons = QHBoxLayout()
         cancel = QPushButton("取消")
         save = QPushButton("保存")
@@ -68,6 +69,39 @@ class NameDialog(QDialog):
         buttons.addWidget(cancel)
         buttons.addWidget(confirm)
         form.addRow(buttons)
+
+
+def add_project_path_field(form, value, parent):
+    row = QHBoxLayout()
+    edit = QLineEdit(value)
+    edit.setPlaceholderText("选填：项目的文件夹或文件路径")
+    row.addWidget(edit, 1)
+    for label, folder in (("文件夹", True), ("文件", False)):
+        button = QPushButton(label)
+        button.setAutoDefault(False)
+
+        def browse(_checked=False, choose_folder=folder):
+            if choose_folder:
+                path = QFileDialog.getExistingDirectory(parent, "选择项目文件夹", edit.text())
+            else:
+                path, _filter = QFileDialog.getOpenFileName(parent, "选择项目文件", edit.text())
+            if path:
+                edit.setText(path)
+
+        button.clicked.connect(browse)
+        row.addWidget(button)
+    form.addRow("项目位置（选填）", row)
+    return edit
+
+
+class NewProjectDialog(NameDialog):
+    def __init__(self, parent=None):
+        super().__init__("新建项目大纲", "文件名", "新项目大纲", parent)
+        form = self.layout()
+        self.project_path = add_project_path_field(form, "", self)
+        # 保持确定按钮在全部输入项下方。
+        field = form.takeRow(form.rowCount() - 1)
+        form.insertRow(1, field.labelItem.widget(), field.fieldItem.layout())
 
 
 class FindReplaceDialog(QDialog):

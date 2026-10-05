@@ -14,9 +14,10 @@ from .mixins.panels import PanelsMixin
 from .mixins.preview import PreviewMixin
 from .mixins.projects import ProjectsMixin
 from .mixins.ui import UiMixin
+from .mixins.toolbars import ToolbarsMixin
 
 
-class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, MediaMixin, PanelsMixin, ActionsMixin, QMainWindow):
+class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, ToolbarsMixin, MediaMixin, PanelsMixin, ActionsMixin, QMainWindow):
     def __init__(self):
         super().__init__()
         for directory in (MARKDOWN_DIR, DATA_DIR, BACKUP_DIR, MEDIA_DIR):

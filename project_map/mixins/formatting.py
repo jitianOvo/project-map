@@ -6,14 +6,16 @@ import re
 from PySide6.QtCore import QByteArray, QSize, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPixmap, QTextCursor
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QToolBar, QToolButton, QTextEdit
+from PySide6.QtWidgets import QTextEdit
+
+from ..editor_workflow import PRIORITIES, priority_icon
+from ..toolbars import AdaptiveToolBar
 
 class FormattingMixin:
 
     def add_markdown_toolbar(self, parent_layout):
-        bar = QToolBar("Markdown 格式工具栏")
+        bar = AdaptiveToolBar("格式工具", icons_only=True)
         bar.setObjectName("markdownBar")
-        bar.setIconSize(QSize(18, 18))
         groups = [
             [("↶", "撤销", "Ctrl+Z", self.editor_undo), ("↷", "重做", "Ctrl+Y", self.editor_redo)],
             [("B", "加粗", "Ctrl+B", lambda: self.wrap_selection("**", "**")),
@@ -29,24 +31,29 @@ class FormattingMixin:
             [("☷", "项目列表", "Ctrl+Shift+8", lambda: self.prefix_lines("- ")), ("☑", "任务清单", "Ctrl+Shift+9", lambda: self.prefix_lines("- [ ] ")), (">", "引用", "Ctrl+Shift+.", lambda: self.prefix_lines("> "))],
             [("</>", "代码块", "Ctrl+Shift+C", self.insert_code_block), ("↗", "插入链接", "Ctrl+K", self.insert_link), ("—", "分隔线", "Ctrl+H", lambda: self.insert_text("\n\n---\n\n"))],
         ]
-        for group_index, group in enumerate(groups):
-            if group_index:
-                bar.addSeparator()
+        groups.append([
+            ("V+", "增加 Vn", "", self.editor.add_version),
+            ("v.x", "增加子版本", "", lambda: self.editor.add_version(True)),
+            ("V−", "减少 Vn", "", self.editor.remove_version),
+        ])
+        for key, (name, _color) in PRIORITIES.items():
+            groups.append([(name[0], name, "", lambda _checked=False, value=key: self.editor.set_priority(value))])
+        groups.append([("○", "清除优先级", "", lambda: self.editor.set_priority(None))])
+        actions = {}
+        for group in groups:
             for symbol, name, shortcut, handler in group:
-                action = QAction(self.vector_icon(symbol), symbol, self)
+                action = QAction(self.vector_icon(symbol), name, self)
                 action.setToolTip(f"{name}{'  ·  ' + shortcut if shortcut else ''}")
                 if shortcut:
                     action.setShortcut(QKeySequence(shortcut))
                     action.setShortcutVisibleInContextMenu(True)
                 action.triggered.connect(handler)
                 self.addAction(action)
-                button = QToolButton()
-                button.setDefaultAction(action)
-                button.setObjectName("formatButton")
-                button.setToolButtonStyle(Qt.ToolButtonIconOnly)
-                button.setIconSize(QSize(20, 20))
-                button.setToolTip(action.toolTip())
-                bar.addWidget(button)
+                actions[name] = action
+        for key, (name, _color) in PRIORITIES.items():
+            actions[name].setIcon(priority_icon(key))
+        self.markdown_toolbar = bar
+        self.configure_toolbar(bar, "format", actions)
         parent_layout.addWidget(bar)
 
     def editor_undo(self):
@@ -62,7 +69,8 @@ class FormattingMixin:
         <text x="12" y="16.5" text-anchor="middle" font-family="Segoe UI, Microsoft YaHei UI" font-size="12" font-weight="700" fill="#64748b">{safe_symbol}</text>
         </svg>'''
         renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
-        pixmap = QPixmap(24, 24)
+        pixmap = QPixmap(48, 48)
+        pixmap.setDevicePixelRatio(2)
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
         renderer.render(painter)

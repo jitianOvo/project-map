@@ -1,0 +1,25 @@
+VSVersionInfo(
+    ffi=FixedFileInfo(
+        filevers=(3, 5, 0, 0),
+        prodvers=(3, 5, 0, 0),
+        mask=0x3f,
+        flags=0x0,
+        OS=0x40004,
+        fileType=0x1,
+        subtype=0x0,
+        date=(0, 0),
+    ),
+    kids=[
+        StringFileInfo([
+            StringTable('080404B0', [
+                StringStruct('FileDescription', '项目航图 Markdown 大纲管理器'),
+                StringStruct('FileVersion', '3.5.0'),
+                StringStruct('InternalName', 'ProjectMap'),
+                StringStruct('OriginalFilename', '项目航图.exe'),
+                StringStruct('ProductName', '项目航图'),
+                StringStruct('ProductVersion', '3.5.0'),
+            ]),
+        ]),
+        VarFileInfo([VarStruct('Translation', [2052, 1200])]),
+    ],
+)

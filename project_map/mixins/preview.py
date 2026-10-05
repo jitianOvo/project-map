@@ -64,7 +64,7 @@ class PreviewMixin:
         """)
         vertical_ratio = vertical_value / old_vertical_max if old_vertical_max else 0.0
         horizontal_ratio = horizontal_value / old_horizontal_max if old_horizontal_max else 0.0
-        QTimer.singleShot(0, lambda: self.restore_preview_scroll(vertical_value, horizontal_value, vertical_ratio, horizontal_ratio, update_serial, 0))
+        QTimer.singleShot(0, self, lambda: self.restore_preview_scroll(vertical_value, horizontal_value, vertical_ratio, horizontal_ratio, update_serial, 0))
         self.update_toc_and_tasks()
 
     def scale_preview_images(self, rendered_html):
@@ -105,7 +105,7 @@ class PreviewMixin:
         vertical = self.preview.verticalScrollBar()
         horizontal = self.preview.horizontalScrollBar()
         if attempt < 8 and vertical.maximum() == 0 and (vertical_value or vertical_ratio):
-            QTimer.singleShot(25, lambda: self.restore_preview_scroll(vertical_value, horizontal_value, vertical_ratio, horizontal_ratio, update_serial, attempt + 1))
+            QTimer.singleShot(25, self, lambda: self.restore_preview_scroll(vertical_value, horizontal_value, vertical_ratio, horizontal_ratio, update_serial, attempt + 1))
             return
         vertical.setValue(min(vertical.maximum(), max(0, round(vertical_value if vertical_value else vertical.maximum() * vertical_ratio))))
         horizontal.setValue(min(horizontal.maximum(), max(0, round(horizontal_value if horizontal_value else horizontal.maximum() * horizontal_ratio))))

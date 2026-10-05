@@ -6,11 +6,12 @@ import shutil
 from pathlib import Path
 
 from PySide6.QtCore import QRegularExpression, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QTextCharFormat, QTextCursor, QSyntaxHighlighter
+from PySide6.QtGui import QColor, QContextMenuEvent, QFont, QImage, QKeySequence, QPainter, QTextCharFormat, QTextCursor, QSyntaxHighlighter
 from PySide6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 
 from .config import MEDIA_DIR
 from .menus import RoundedMenu
+from .editor_workflow import EditorWorkflow, PRIORITIES, PRIORITY_SPAN, utf16_length
 
 class LineNumberArea(QWidget):
     def __init__(self, editor):
@@ -44,6 +45,15 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             match = expression.match(text)
             if match.hasMatch():
                 self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+        for match in PRIORITY_SPAN.finditer(text):
+            for _name, color in PRIORITIES.values():
+                if color in match[0]:
+                    fmt = QTextCharFormat()
+                    fmt.setForeground(QColor(color))
+                    start = len(text[:match.start()].encode("utf-16-le")) // 2
+                    length = len(match[0].encode("utf-16-le")) // 2
+                    self.setFormat(start, length, fmt)
+                    break
 
 
 class MarkdownEditor(QPlainTextEdit):
@@ -53,6 +63,7 @@ class MarkdownEditor(QPlainTextEdit):
         super().__init__(parent)
         self.theme_name = "dark"
         self.pasted_number_blocks = []
+        self.workflow = EditorWorkflow(self)
         self.line_numbers = LineNumberArea(self)
         self.blockCountChanged.connect(self.update_line_number_width)
         self.updateRequest.connect(self.update_line_number_area)
@@ -86,7 +97,7 @@ class MarkdownEditor(QPlainTextEdit):
     def mousePressEvent(self, event):
         horizontal = self.horizontalScrollBar().value()
         super().mousePressEvent(event)
-        QTimer.singleShot(0, lambda: self.horizontalScrollBar().setValue(horizontal))
+        QTimer.singleShot(0, self, lambda: self.horizontalScrollBar().setValue(horizontal))
 
     def highlight_current_line(self):
         extra = []
@@ -105,6 +116,8 @@ class MarkdownEditor(QPlainTextEdit):
         self.line_numbers.update()
 
     def contextMenuEvent(self, event):
+        if not self.textCursor().hasSelection() and event.reason() == QContextMenuEvent.Mouse:
+            self.setTextCursor(self.cursorForPosition(event.pos()))
         menu = RoundedMenu(self)
         undo = menu.addAction("撤销")
         undo.setShortcut(QKeySequence.Undo)
@@ -127,6 +140,7 @@ class MarkdownEditor(QPlainTextEdit):
         paste.setShortcut(QKeySequence.Paste)
         paste.setEnabled(bool(self.canPaste()))
         paste.triggered.connect(self.paste)
+        self.workflow.add_context_actions(menu)
         delete = menu.addAction("删除选中内容")
         delete.setEnabled(self.textCursor().hasSelection())
         delete.triggered.connect(self.delete_selection)
@@ -135,6 +149,15 @@ class MarkdownEditor(QPlainTextEdit):
         select_all.setShortcut(QKeySequence.SelectAll)
         select_all.triggered.connect(self.selectAll)
         menu.exec(event.globalPos())
+
+    def add_version(self, child=False):
+        self.workflow.add_version(child)
+
+    def remove_version(self):
+        self.workflow.remove_version()
+
+    def set_priority(self, value):
+        self.workflow.set_priority(value)
 
     def delete_selection(self):
         cursor = self.textCursor()
@@ -161,6 +184,10 @@ class MarkdownEditor(QPlainTextEdit):
             block_number += 1
 
     def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and event.modifiers() == Qt.ShiftModifier:
+            if self.workflow.insert_numbered_item():
+                event.accept()
+                return
         if event.key() in (Qt.Key_Tab, Qt.Key_Backtab):
             if self.textCursor().hasSelection():
                 self.indent_selection(event.key() == Qt.Key_Backtab or bool(event.modifiers() & Qt.ShiftModifier))
@@ -207,7 +234,7 @@ class MarkdownEditor(QPlainTextEdit):
         replacement = "\n".join(lines)
         cursor.insertText(replacement)
         cursor.setPosition(first)
-        cursor.setPosition(first + len(replacement), QTextCursor.KeepAnchor)
+        cursor.setPosition(first + utf16_length(replacement), QTextCursor.KeepAnchor)
         self.setTextCursor(cursor)
         self.setFocus()
 
@@ -283,7 +310,7 @@ class MarkdownEditor(QPlainTextEdit):
     def try_continue_numbered_list(self):
         cursor = self.textCursor()
         current_line = cursor.block().text()
-        if cursor.positionInBlock() != len(current_line):
+        if cursor.positionInBlock() != utf16_length(current_line):
             return False
         match = re.match(r"^([ \t]*)(\d+)\.(?:[ \t]+|$)(.*)$", current_line)
         if not match:

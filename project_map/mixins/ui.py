@@ -13,13 +13,16 @@ from ..editor import MarkdownEditor
 from ..menus import RoundedMenu
 from ..preview import PreviewBrowser
 from ..project_list import ProjectListWidget
+from ..toolbars import AdaptiveToolBar
 
 class UiMixin:
 
     def build_ui(self):
-        toolbar = QToolBar("工具栏")
-        toolbar.setMovable(False)
-        self.addToolBar(toolbar)
+        toolbar = AdaptiveToolBar("快速工具")
+        self.quick_toolbar = toolbar
+        self.toolbar_catalogs = {}
+        self.toolbar_widgets = {}
+        quick_actions = {}
         actions = [
             ("新建", self.new_file, "Ctrl+N"),
             ("保存", self.save_file, "Ctrl+S"),
@@ -34,33 +37,47 @@ class UiMixin:
             action.setToolTip(f"{label}  ·  {shortcut}")
             action.setStatusTip(f"{label}（{shortcut}）")
             action.triggered.connect(handler)
-            toolbar.addAction(action)
-        toolbar.addSeparator()
+            self.addAction(action)
+            quick_actions[label] = action
         theme_action = QAction("切换主题", self)
         theme_action.setShortcut(QKeySequence("Ctrl+T"))
         theme_action.setToolTip("切换主题  ·  Ctrl+T")
         theme_action.triggered.connect(self.toggle_theme)
-        toolbar.addAction(theme_action)
+        self.addAction(theme_action)
+        quick_actions["切换主题"] = theme_action
         self.right_toggle_action = QAction("收起右栏", self)
         self.right_toggle_action.setShortcut(QKeySequence("Ctrl+R"))
         self.right_toggle_action.setToolTip("收起右栏 / 展开右栏  ·  Ctrl+R")
         self.right_toggle_action.triggered.connect(self.toggle_right_panel)
-        toolbar.addAction(self.right_toggle_action)
+        self.addAction(self.right_toggle_action)
+        quick_actions["右侧辅助面板"] = self.right_toggle_action
         open_action = QAction("打开数据目录", self)
         open_action.setShortcut(QKeySequence("Ctrl+O"))
         open_action.setToolTip("打开数据目录  ·  Ctrl+O")
         open_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(MARKDOWN_DIR))))
-        toolbar.addAction(open_action)
+        self.addAction(open_action)
+        quick_actions["打开数据目录"] = open_action
         media_action = QAction("图片缓存", self)
         media_action.setToolTip("管理默认与附加 Media 图片缓存目录")
         media_action.triggered.connect(self.show_media_folders)
-        toolbar.addAction(media_action)
+        quick_actions["图片缓存"] = media_action
+
+        self.open_project_action = QAction("打开项目位置", self)
+        self.open_project_action.setToolTip("打开项目属性中填写的关联文件或文件夹")
+        self.open_project_action.triggered.connect(lambda: self.open_associated_project())
+        quick_actions["打开项目位置"] = self.open_project_action
+        self.configure_toolbar(toolbar, "quick", quick_actions)
 
         root = QWidget()
         self.setCentralWidget(root)
-        layout = QHBoxLayout(root)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        root_layout = QVBoxLayout(root)
+        root_layout.setContentsMargins(10, 6, 10, 10)
+        root_layout.setSpacing(6)
+        root_layout.addWidget(toolbar)
+        content = QWidget(root)
+        root_layout.addWidget(content, 1)
+        layout = QHBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         left = QWidget()
         self.left_panel = left
@@ -122,7 +139,7 @@ class UiMixin:
         self.file_header = file_header
         file_header.addWidget(self.file_title)
         file_header.addStretch()
-        self.expand_left_button = QToolButton(root)
+        self.expand_left_button = QToolButton(content)
         self.expand_left_button.setObjectName("panelExpandButton")
         self.expand_left_button.setText("›")
         self.expand_left_button.setToolTip("展开左侧项目库")

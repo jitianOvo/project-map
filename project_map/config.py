@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+APP_VERSION = "3.5.0"
+
 if getattr(sys, "frozen", False):
     _exe_dir = Path(sys.executable).resolve().parent
     _adjacent_markdown = _exe_dir / "Markdown"

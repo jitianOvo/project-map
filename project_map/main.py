@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from .appearance import configure_windows_app_id, load_app_icon
+from .config import APP_VERSION
 from .single_instance import SingleInstance
 from .window import MainWindow
 
@@ -15,6 +16,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("项目航图")
     app.setApplicationDisplayName("项目航图")
+    app.setApplicationVersion(APP_VERSION)
     app.setStyle("Fusion")
     icon = load_app_icon()
     if not icon.isNull():
