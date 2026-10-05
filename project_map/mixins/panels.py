@@ -178,7 +178,7 @@ class PanelsMixin:
             self.expand_left_button.setGeometry(4, 16, 30, 30)
             self.expand_left_button.raise_()
         if hasattr(self, "preview") and self.preview.isVisible():
-            QTimer.singleShot(120, self.update_preview)
+            QTimer.singleShot(120, self, self.update_preview)
         self.schedule_layout_save()
 
     def moveEvent(self, event):

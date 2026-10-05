@@ -10,7 +10,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['numpy', 'PIL', 'tkinter'],
     noarchive=False,
     optimize=0,
 )
@@ -36,4 +36,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['assets\\app_icon.ico'],
+    version='assets/version_info.txt',
 )
