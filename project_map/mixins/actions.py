@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QDialog, QLi
 from ..appearance import apply_window_icon
 from ..config import APP_DIR, BACKUP_DIR, MARKDOWN_DIR
 from ..dialogs import FindReplaceDialog, NewProjectDialog, ProjectDialog
+from ..file_io import atomic_write
 
 class ActionsMixin:
 
@@ -50,8 +51,8 @@ class ActionsMixin:
         try:
             if create_backup and self.current_path.exists():
                 stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-                shutil.copy2(self.current_path, BACKUP_DIR / f"{self.current_path.stem}_{stamp}.md.bak")
-            self.current_path.write_text(self.editor.toPlainText(), encoding="utf-8")
+                shutil.copy2(self.current_path, self.paths.backups / f"{self.current_path.stem}_{stamp}.md.bak")
+            atomic_write(self.current_path, self.editor.toPlainText().encode("utf-8"))
         except OSError as error:
             self.save_guard = False
             self.statusBar().showMessage(f"保存失败：{error}")
@@ -86,12 +87,16 @@ class ActionsMixin:
     def new_file(self):
         if not self.maybe_save():
             return
+        self.save_project_view_state()
         dialog = NewProjectDialog(self)
         if dialog.exec() != QDialog.Accepted or not dialog.value.text().strip():
             return
         name = dialog.value.text()
         filename = name.strip() + ("" if name.lower().endswith(".md") else ".md")
-        path = MARKDOWN_DIR / filename
+        path = self.paths.markdown / filename
+        if path.parent.resolve() != self.paths.markdown.resolve() or any(character in filename for character in '<>:"/\\|?*'):
+            self.show_notice("文件名不可使用", "名称不能含有路径或 Windows 文件名不支持的字符。")
+            return
         if path.exists():
             self.show_notice("文件已存在", "这个名称已经被使用，请换一个名称。")
             return
@@ -122,6 +127,9 @@ class ActionsMixin:
         self.refresh_files()
 
     def import_file(self):
+        if not self.maybe_save():
+            return
+        self.save_project_view_state()
         source, _ = QFileDialog.getOpenFileName(self, "导入 Markdown", str(APP_DIR), "Markdown (*.md)")
         if not source:
             return
@@ -195,7 +203,7 @@ class ActionsMixin:
         elif external:
             result = f"已移出项目库，外部原文件保持不变：{display_name}"
         else:
-            shutil.move(str(path), str(BACKUP_DIR / f"{path.stem}_{stamp}.md.deleted"))
+            shutil.move(str(path), str(self.paths.backups / f"{path.stem}_{stamp}.md.deleted"))
             result = f"已移入备份：{display_name}"
         self.metadata.pop(key, None)
         self.save_metadata()
@@ -243,6 +251,9 @@ class ActionsMixin:
         self.statusBar().showMessage("已找到匹配内容")
 
     def replace_current(self):
+        if self.editor.isReadOnly():
+            self.statusBar().showMessage("请先取得本端编辑占用再替换内容")
+            return
         query = self.find_dialog.find_edit.text()
         replacement = self.find_dialog.replace_edit.text()
         if not query:
@@ -256,6 +267,9 @@ class ActionsMixin:
         self.find_next()
 
     def replace_all(self):
+        if self.editor.isReadOnly():
+            self.statusBar().showMessage("请先取得本端编辑占用再替换内容")
+            return
         query = self.find_dialog.find_edit.text()
         replacement = self.find_dialog.replace_edit.text()
         if not query:
@@ -332,12 +346,15 @@ class ActionsMixin:
             #panelTitle { font-size:15px; font-weight:700; background:#ffffff; color:#526174; padding:5px 14px; border-radius:9px; }
             #fileTitle { font-size:20px; font-weight:700; padding:2px 0; }
             #muted { color:#7b8799; font-size:12px; }
+            QToolButton#cloudStatusButton { background:transparent; color:#64748b; border:0; border-radius:7px; padding:3px 8px; font-size:12px; }
+            QToolButton#cloudStatusButton:hover { background:#e8eefb; color:#2563eb; }
             #countBadge { background:#e8eefb; color:#2563eb; border-radius:10px; padding:4px 9px; font-size:12px; }
             QToolButton#panelCollapseButton, QToolButton#panelExpandButton { background:#ffffff; color:#64748b; border:1px solid #e1e5ec; border-radius:8px; min-width:28px; min-height:28px; font-size:20px; padding:0; }
             QToolButton#panelCollapseButton:hover, QToolButton#panelExpandButton:hover { background:#eef4ff; color:#2563eb; }
             QPushButton#primaryButton { background:#2563eb; color:#ffffff; border:0; }
             #info { padding:10px; color:#526174; }
             #zoomBadge { background:#e8eefb; color:#526fa5; border-radius:8px; padding:3px 8px; }
+            #editingBanner { background:#e8eefb; border-radius:8px; }
             """
         return """
         QWidget { background:#0f172a; color:#e5e7eb; font-family:'Microsoft YaHei UI'; font-size:14px; }
@@ -381,12 +398,15 @@ class ActionsMixin:
         #panelTitle { font-size:15px; font-weight:700; background:#1d2c43; color:#b6c3d6; padding:5px 14px; border-radius:9px; }
         #fileTitle { font-size:20px; font-weight:700; padding:2px 0; }
         #muted { color:#8293aa; font-size:12px; }
+        QToolButton#cloudStatusButton { background:transparent; color:#a6b5cb; border:0; border-radius:7px; padding:3px 8px; font-size:12px; }
+        QToolButton#cloudStatusButton:hover { background:#243653; color:#93c5fd; }
         #countBadge { background:#243653; color:#93c5fd; border-radius:10px; padding:4px 9px; font-size:12px; }
         QToolButton#panelCollapseButton, QToolButton#panelExpandButton { background:#1d2c43; color:#94a3b8; border:1px solid #2b3c59; border-radius:8px; min-width:28px; min-height:28px; font-size:20px; padding:0; }
         QToolButton#panelCollapseButton:hover, QToolButton#panelExpandButton:hover { background:#243b60; color:#bfdbfe; }
         QPushButton#primaryButton { background:#2563eb; color:#ffffff; border:0; }
         #info { padding:10px; color:#b6c3d6; }
         #zoomBadge { background:#243653; color:#9bb9e8; border-radius:8px; padding:3px 8px; }
+        #editingBanner { background:#243653; border-radius:8px; }
         """
 
     def external_file_changed(self, filename):
@@ -401,6 +421,18 @@ class ActionsMixin:
             self.refresh_files()
 
     def closeEvent(self, event: QCloseEvent):
+        if hasattr(self, "cloud") and not self.cloud.editing.closing_ready:
+            if self.cloud.busy and not self.cloud.editing.pending:
+                self.cloud.editing.close_after = True
+                event.ignore()
+                return
+            if self.cloud.editing.pending:
+                self.cloud.editing.close_after = True
+                event.ignore()
+                return
+            if self.cloud.editing.end_editing(close=True):
+                event.ignore()
+                return
         self.save_project_view_state()
         self.flush_auto_save()
         if not self.maybe_save():
@@ -408,4 +440,6 @@ class ActionsMixin:
             return
         self.save_metadata()
         self.save_layout()
+        if hasattr(self, "cloud"):
+            self.cloud.shutdown()
         event.accept()

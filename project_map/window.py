@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QFileSystemWatcher, QSettings, QTimer
+from PySide6.QtCore import QEvent, QFileSystemWatcher, QSettings, QTimer
 from PySide6.QtWidgets import QMainWindow
 
 from .appearance import apply_window_icon
-from .config import BACKUP_DIR, DATA_DIR, MARKDOWN_DIR, MEDIA_DIR
+from .config import APP_DIR, BACKUP_DIR, DATA_DIR, MARKDOWN_DIR, MEDIA_DIR
+from .locations import AppPaths
+from .cloud.controller import CloudController
+from .mixins.integration import IntegrationMixin
 from .mixins.actions import ActionsMixin
 from .mixins.formatting import FormattingMixin
 from .mixins.media import MediaMixin
@@ -17,12 +20,13 @@ from .mixins.ui import UiMixin
 from .mixins.toolbars import ToolbarsMixin
 
 
-class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, ToolbarsMixin, MediaMixin, PanelsMixin, ActionsMixin, QMainWindow):
+class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, ToolbarsMixin, MediaMixin, PanelsMixin, ActionsMixin, IntegrationMixin, QMainWindow):
     def __init__(self):
         super().__init__()
-        for directory in (MARKDOWN_DIR, DATA_DIR, BACKUP_DIR, MEDIA_DIR):
-            directory.mkdir(exist_ok=True)
-        self.settings = QSettings(str(DATA_DIR / "settings.ini"), QSettings.IniFormat)
+        self.paths = AppPaths.load(APP_DIR, MARKDOWN_DIR, MEDIA_DIR, DATA_DIR, BACKUP_DIR)
+        self.paths.ensure()
+        self.paths.save()
+        self.settings = QSettings(str(self.paths.data / "settings.ini"), QSettings.IniFormat)
         self.metadata = self.load_metadata()
         self.current_path: Path | None = None
         self.loading = False
@@ -50,4 +54,18 @@ class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, Toolbars
         self.watcher = QFileSystemWatcher(self)
         self.watcher.directoryChanged.connect(lambda _: self.refresh_files())
         self.watcher.fileChanged.connect(self.external_file_changed)
+        self.watcher.addPath(str(self.paths.markdown))
         self.refresh_files()
+        self.editor.media_dir = self.paths.media
+        self.cloud = CloudController(self)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange and hasattr(self, "cloud"):
+            if self.isMinimized():
+                self.cloud.editing.end_editing()
+            elif self.cloud.editing.managed_id(self.current_path) and self.editor.isReadOnly():
+                if self.cloud.editing.pending:
+                    self.cloud.editing.resume_after = True
+                else:
+                    self.cloud.editing.request_open(self.current_path, force=True, quiet=True)

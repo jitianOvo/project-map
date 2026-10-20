@@ -160,6 +160,8 @@ class MarkdownEditor(QPlainTextEdit):
         self.workflow.set_priority(value)
 
     def delete_selection(self):
+        if self.isReadOnly():
+            return
         cursor = self.textCursor()
         cursor.removeSelectedText()
         self.setTextCursor(cursor)
@@ -184,6 +186,9 @@ class MarkdownEditor(QPlainTextEdit):
             block_number += 1
 
     def keyPressEvent(self, event):
+        if self.isReadOnly():
+            super().keyPressEvent(event)
+            return
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and event.modifiers() == Qt.ShiftModifier:
             if self.workflow.insert_numbered_item():
                 event.accept()
@@ -239,6 +244,8 @@ class MarkdownEditor(QPlainTextEdit):
         self.setFocus()
 
     def insertFromMimeData(self, source):
+        if self.isReadOnly():
+            return
         if source.hasImage():
             image = source.imageData()
             if hasattr(image, "isNull") and not image.isNull():
@@ -269,14 +276,20 @@ class MarkdownEditor(QPlainTextEdit):
         return f"image-{dt.datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}.png"
 
     def insert_pasted_image(self, image):
+        if self.isReadOnly():
+            return
         filename = self.image_name()
-        target = MEDIA_DIR / filename
+        target = getattr(self, "media_dir", MEDIA_DIR) / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
         if image.save(str(target), "PNG"):
             self.insertPlainText(f"![{filename.rsplit('.', 1)[0]}](Media/{filename})")
 
     def insert_pasted_image_file(self, source_path):
+        if self.isReadOnly():
+            return
         filename = self.image_name()
-        target = MEDIA_DIR / filename
+        target = getattr(self, "media_dir", MEDIA_DIR) / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target)
         self.insertPlainText(f"![{filename.rsplit('.', 1)[0]}](Media/{filename})")
 

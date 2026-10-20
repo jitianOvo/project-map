@@ -15,6 +15,7 @@ from ..config import MARKDOWN_DIR, PROJECTS_FILE
 from ..dialogs import NameDialog
 from ..menus import RoundedMenu
 from ..editor_workflow import PRIORITIES, priority_icon
+from ..file_io import write_json
 
 
 class ProjectsMixin:
@@ -24,13 +25,15 @@ class ProjectsMixin:
 
     def load_metadata(self):
         try:
-            data = json.loads(PROJECTS_FILE.read_text(encoding="utf-8"))
+            data = json.loads(self.paths.projects.read_text(encoding="utf-8"))
             return data if isinstance(data, dict) else {}
         except (OSError, json.JSONDecodeError):
             return {}
 
     def save_metadata(self):
-        PROJECTS_FILE.write_text(json.dumps(self.metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json(self.paths.projects, self.metadata)
+        if hasattr(self, "cloud"):
+            self.cloud.schedule()
 
     @staticmethod
     def normalized_path(path):
@@ -40,7 +43,7 @@ class ProjectsMixin:
         return bool(first and second and self.normalized_path(first) == self.normalized_path(second))
 
     def is_local_project(self, path):
-        return self.normalized_path(Path(path).parent) == self.normalized_path(MARKDOWN_DIR)
+        return self.normalized_path(Path(path).parent) == self.normalized_path(self.paths.markdown)
 
     def external_project_key(self, path):
         digest = hashlib.sha1(self.normalized_path(path).encode("utf-8")).hexdigest()[:16]
@@ -62,7 +65,7 @@ class ProjectsMixin:
         return self.metadata.setdefault(key, {}) if create else self.metadata.get(key, {})
 
     def all_project_paths(self):
-        paths = list(MARKDOWN_DIR.glob("*.md"))
+        paths = [path for path in self.paths.markdown.iterdir() if path.is_file() and path.suffix.casefold() == ".md"]
         known = {self.normalized_path(path) for path in paths}
         for meta in self.metadata.values():
             if not isinstance(meta, dict) or not meta.get("source_path"):
@@ -330,6 +333,8 @@ class ProjectsMixin:
             return
         target = Path(current.data(Qt.UserRole))
         if self.same_path(target, self.current_path):
+            if hasattr(self, "cloud") and self.editor.isReadOnly():
+                self.cloud.editing.request_open(target, force=True)
             self.update_pin_button()
             return
         if self.current_path:
@@ -519,6 +524,10 @@ class ProjectsMixin:
         path = Path(path or self.current_path) if path or self.current_path else None
         if not path or not hasattr(self, "editor"):
             return
+        if not self.same_path(path, getattr(self.editor, "current_document_path", None)):
+            return
+        if self.same_path(getattr(self, "restoring_path", None), path):
+            return
         cursor = self.editor.textCursor()
         self.project_meta(path, create=True)["view_state"] = {
             "editor_vertical": self.editor.verticalScrollBar().value(),
@@ -552,9 +561,13 @@ class ProjectsMixin:
         )
         if needs_retry and attempt < 6:
             QTimer.singleShot(35, self, lambda: self.restore_project_view_state(path, attempt + 1))
+        else:
+            self.restoring_path = None
 
     def load_file(self, path):
         path = Path(path)
+        if hasattr(self, "cloud") and self.cloud.editing.request_open(path):
+            return
         try:
             content = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -562,7 +575,16 @@ class ProjectsMixin:
         except OSError as error:
             self.statusBar().showMessage(f"打开失败：{error}")
             return
+        display_name = self.display_name(path)
+        duplicates = [item for item in self.all_project_paths() if self.display_name(item).casefold() == display_name.casefold()]
+        caption = f"{display_name}  ·  {path.resolve(strict=False).parent}" if len(duplicates) > 1 else display_name
+        if self.same_path(path, getattr(self.editor, "current_document_path", None)) and (self.dirty or self.editor.toPlainText() == content):
+            self.file_title.setText(caption + (" *" if self.dirty else ""))
+            self.file_title.setToolTip(str(path.resolve(strict=False)))
+            self.update_sidebar()
+            return
         self.loading = True
+        self.restoring_path = path
         self.current_path = path
         self.settings.setValue("last_file", str(path))
         self.editor.pasted_number_blocks = []
@@ -570,11 +592,7 @@ class ProjectsMixin:
         self.editor.setPlainText(content)
         self.loading = False
         self.dirty = False
-        display_name = self.display_name(path)
-        duplicates = [item for item in self.all_project_paths() if self.display_name(item).casefold() == display_name.casefold()]
-        self.file_title.setText(
-            f"{display_name}  ·  {path.resolve(strict=False).parent}" if len(duplicates) > 1 else display_name
-        )
+        self.file_title.setText(caption)
         self.file_title.setToolTip(str(path.resolve(strict=False)))
         self.update_preview()
         self.update_sidebar()

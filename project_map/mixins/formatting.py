@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import re
 
-from PySide6.QtCore import QByteArray, QSize, Qt
+from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPixmap, QTextCursor
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QTextEdit
@@ -14,7 +14,7 @@ from ..toolbars import AdaptiveToolBar
 class FormattingMixin:
 
     def add_markdown_toolbar(self, parent_layout):
-        bar = AdaptiveToolBar("格式工具", icons_only=True)
+        bar = AdaptiveToolBar("格式工具", icons_only=True, show_settings=False)
         bar.setObjectName("markdownBar")
         groups = [
             [("↶", "撤销", "Ctrl+Z", self.editor_undo), ("↷", "重做", "Ctrl+Y", self.editor_redo)],
@@ -73,7 +73,8 @@ class FormattingMixin:
         pixmap.setDevicePixelRatio(2)
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
-        renderer.render(painter)
+        # 画布是 48 个物理像素，但 DPR=2 后绘制范围仍是 24 个逻辑像素。
+        renderer.render(painter, QRectF(0, 0, 24, 24))
         painter.end()
         return QIcon(pixmap)
 
@@ -84,6 +85,8 @@ class FormattingMixin:
         return cursor
 
     def wrap_selection(self, prefix, suffix):
+        if self.editor.isReadOnly():
+            return
         cursor = self.editor.textCursor()
         if not cursor.hasSelection():
             block = cursor.block()
@@ -120,6 +123,8 @@ class FormattingMixin:
         self.editor.setFocus()
 
     def set_heading_level(self, level):
+        if self.editor.isReadOnly():
+            return
         cursor = self.editor.textCursor()
         start, end = cursor.selectionStart(), cursor.selectionEnd()
         cursor.setPosition(start)
@@ -146,6 +151,8 @@ class FormattingMixin:
         self.editor.setFocus()
 
     def prefix_lines(self, prefix):
+        if self.editor.isReadOnly():
+            return
         cursor = self.editor.textCursor()
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
@@ -163,6 +170,8 @@ class FormattingMixin:
         self.editor.setFocus()
 
     def insert_text(self, text):
+        if self.editor.isReadOnly():
+            return
         self.editor.textCursor().insertText(text)
         self.editor.setFocus()
 

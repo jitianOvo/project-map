@@ -23,10 +23,13 @@ from project_map.window import MainWindow
 from project_map.menus import RoundedMenu
 
 
-APP = QApplication.instance() or QApplication([])
+from qt_test_support import APP
 
 
 def dispose(widget):
+    if hasattr(widget, "cloud"):
+        widget.cloud.editing.closing_ready = True
+        widget.cloud.shutdown()
     widget.close()
     widget.deleteLater()
     APP.sendPostedEvents(None, QEvent.DeferredDelete)
@@ -181,6 +184,7 @@ class ToolbarTests(unittest.TestCase):
         last.trigger()
         self.assertEqual(triggered, [19])
         bar.set_collapsed(True)
+        QTest.qWait(230)
         self.assertTrue(all(button.isHidden() for button in bar.buttons))
         bar.set_collapsed(False)
         self.assertTrue(bar.overflow_menu.actions())
@@ -211,6 +215,116 @@ class ToolbarTests(unittest.TestCase):
         self.assertEqual(dialog.result(), QDialog.Accepted)
         self.assertEqual(dialog.project_path.text(), "")
         dispose(dialog)
+
+    def test_settings_focus_frame_removed_without_losing_keyboard(self):
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QImage, QPainter
+        from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
+        from project_map.project_list import NoFocusFrameDelegate
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = QSettings(str(Path(directory) / "settings.ini"), QSettings.IniFormat)
+            dialog = ToolbarSettingsDialog(settings, {"format": ("格式工具", {name: QAction(name, APP) for name in ("撤销", "重做")})})
+            view = dialog.lists["format"]
+            self.assertIsInstance(view.itemDelegate(), NoFocusFrameDelegate)
+            dialog.show()
+            view.setCurrentRow(0)
+            view.setFocus()
+            APP.processEvents()
+            QTest.keyClick(view, Qt.Key_Down)
+            self.assertEqual(view.currentRow(), 1)
+            QTest.keyClick(view, Qt.Key_Space)
+            self.assertEqual(view.item(1).checkState(), Qt.Unchecked)
+
+            def render(focused):
+                image = QImage(260, 48, QImage.Format_ARGB32_Premultiplied)
+                image.fill(Qt.transparent)
+                option = QStyleOptionViewItem()
+                option.initFrom(view)
+                option.rect = QRect(0, 0, 260, 48)
+                option.state |= QStyle.State_Selected | QStyle.State_Active
+                option.state &= ~QStyle.State_HasFocus
+                if focused:
+                    option.state |= QStyle.State_HasFocus
+                painter = QPainter(image)
+                view.itemDelegate().paint(painter, option, view.model().index(1, 0))
+                painter.end()
+                return image
+
+            self.assertEqual(render(True), render(False))
+            dispose(dialog)
+
+    def test_collapse_animation_has_intermediate_frames(self):
+        from PySide6.QtTest import QSignalSpy
+
+        bar = AdaptiveToolBar("格式工具", icons_only=True)
+        bar.resize(600, 44)
+        bar.set_entries([QAction(f"工具{index}", bar) for index in range(10)])
+        bar.show()
+        APP.processEvents()
+        original_height = bar.height()
+        original_content_width = bar.tools.width()
+        self.assertGreater(bar.tools.height(), 0)
+        bar.set_collapsed(True)
+        self.assertTrue(bar.transitioning)
+        self.assertTrue(any(button.isVisible() for button in bar.buttons))
+        frames = QSignalSpy(bar.fade_effect.opacityChanged)
+        QTest.qWait(65)
+        self.assertGreater(bar.fade_effect.opacity(), 0)
+        self.assertLess(bar.fade_effect.opacity(), 1)
+        self.assertGreater(bar.tool_viewport.width(), 0)
+        self.assertLess(bar.tool_viewport.width(), original_content_width)
+        self.assertEqual(bar.tools.width(), original_content_width)
+        self.assertLess(bar.tools.x(), 0)
+        self.assertLessEqual(bar.transition_animation.duration(), 150)
+        QTest.qWait(180)
+        self.assertGreaterEqual(frames.count(), 5)
+        self.assertFalse(bar.transitioning)
+        self.assertIsNone(bar.tools.graphicsEffect())
+        self.assertTrue(all(button.isHidden() for button in bar.buttons))
+        self.assertEqual(bar.height(), original_height)
+        bar.set_collapsed(False)
+        self.assertTrue(bar.transitioning)
+        QTest.qWait(230)
+        self.assertTrue(any(button.isVisible() for button in bar.buttons))
+        self.assertIsNone(bar.tools.graphicsEffect())
+        self.assertEqual(bar.tool_viewport.width(), bar.tools.width())
+        self.assertEqual(bar.tools.x(), 0)
+        self.assertEqual(bar.height(), original_height)
+        dispose(bar)
+
+    def test_collapse_animation_reverses_and_survives_resize(self):
+        bar = AdaptiveToolBar("格式工具", icons_only=True)
+        bar.resize(650, 44)
+        bar.set_entries([QAction(f"工具{index}", bar) for index in range(20)])
+        bar.show()
+        APP.processEvents()
+        bar.set_collapsed(True)
+        QTest.qWait(55)
+        previous_opacity = bar.fade_effect.opacity()
+        previous_reveal = bar.get_reveal_progress()
+        bar.set_collapsed(False)
+        self.assertAlmostEqual(bar.fade_effect.opacity(), previous_opacity)
+        self.assertAlmostEqual(bar.get_reveal_progress(), previous_reveal)
+        bar.resize(300, 44)
+        QTest.qWait(230)
+        self.assertFalse(bar.collapsed)
+        self.assertFalse(bar.transitioning)
+        self.assertTrue(bar.overflow_menu.actions())
+        self.assertIsNone(bar.tools.graphicsEffect())
+        bar.set_collapsed(True, notify=False)
+        self.assertFalse(bar.transitioning)
+        self.assertTrue(all(button.isHidden() for button in bar.buttons))
+        dispose(bar)
+
+    def test_priority_rename_preserves_saved_order_and_hidden_tools(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = QSettings(str(Path(directory) / "settings.ini"), QSettings.IniFormat)
+            settings.setValue("toolbar/format/order", json.dumps(["普通（绿色）", "最紧急（红色）", "加粗", "优先（蓝色）"]))
+            settings.setValue("toolbar/format/hidden", json.dumps(["最紧急（红色）"]))
+            self.assertEqual(toolbar_enabled(settings, "format", {name: None for name in ("加粗", "紧急", "优先", "普通")}), ["普通", "加粗", "优先"])
 
 
 class WindowTests(unittest.TestCase):
@@ -306,6 +420,98 @@ class WindowTests(unittest.TestCase):
         QTest.qWait(30)
         self.assertEqual(self.window.preview.verticalScrollBar().value(), 200)
         self.assertIn("#dc2626", self.window.preview.toHtml())
+
+    def test_toolbar_settings_share_complete_icons_and_labels(self):
+        from test_icons import reference_icon
+        from PySide6.QtCore import QSize
+
+        actions = self.window.toolbar_catalogs["format"][1]
+        symbols = {"撤销": "↶", "重做": "↷", "加粗": "B", "斜体": "I", "一级标题": "H1", "六级标题": "H6", "增加 Vn": "V+", "增加子版本": "v.x"}
+        for theme in ("light", "dark"):
+            self.window.apply_theme(theme)
+            dialog = ToolbarSettingsDialog(self.window.settings, self.window.toolbar_catalogs, self.window)
+            dialog.tabs.setCurrentWidget(dialog.lists["format"])
+            dialog.show()
+            dialog.lists["format"].setCurrentRow(1)
+            dialog.lists["format"].setFocus()
+            APP.processEvents()
+            view = dialog.lists["format"]
+            self.assertEqual(view.iconSize(), QSize(22, 22))
+            for row in range(view.count()):
+                item = view.item(row)
+                name = item.data(Qt.UserRole)
+                self.assertEqual(item.text(), actions[name].text())
+                if name in symbols:
+                    self.assertEqual(item.icon().pixmap(QSize(22, 22), 2).toImage(), reference_icon(symbols[name]).pixmap(QSize(22, 22), 2).toImage())
+            if directory := os.environ.get("PROJECT_MAP_QA_DIR"):
+                output = Path(directory)
+                output.mkdir(parents=True, exist_ok=True)
+                self.window.markdown_toolbar.grab().save(str(output / f"toolbar-{theme}.png"))
+                dialog.grab().save(str(output / f"settings-{theme}.png"))
+                view.scrollToItem(view.item(view.count() - 1))
+                APP.processEvents()
+                dialog.grab().save(str(output / f"settings-priorities-{theme}.png"))
+            dispose(dialog)
+
+    def test_single_settings_entry_and_two_character_priorities(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QToolButton
+
+        self.assertIsNotNone(self.window.quick_toolbar.configure)
+        self.assertIsNone(self.window.markdown_toolbar.configure)
+        buttons = [button for button in self.window.findChildren(QToolButton) if button.text() == "设置"]
+        self.assertEqual(len(buttons), 1)
+        labels = self.window.toolbar_catalogs["format"][1]
+        self.assertTrue({"紧急", "优先", "普通"}.issubset(labels))
+        self.assertFalse(any("（红色）" in name or "（蓝色）" in name or "（绿色）" in name for name in labels))
+        opened = []
+
+        def dismiss_settings():
+            dialog = QApplication.activeModalWidget()
+            if isinstance(dialog, ToolbarSettingsDialog):
+                opened.append(dialog)
+                dialog.reject()
+
+        QTimer.singleShot(0, self.window, dismiss_settings)
+        self.window.quick_toolbar.configure.click()
+        self.assertEqual(len(opened), 1)
+        self.assertEqual(set(opened[0].lists), {"quick", "format"})
+        dispose(opened[0])
+
+    def test_format_animation_keeps_editor_layout_fixed(self):
+        bar = self.window.markdown_toolbar
+        self.assertGreater(bar.tool_viewport.height(), 0)
+        self.assertGreater(bar.tools.height(), 0)
+        initial_editor_rect = self.window.editor.geometry()
+        initial_bar_rect = bar.geometry()
+        for theme in ("light", "dark"):
+            self.window.apply_theme(theme)
+            APP.processEvents()
+            if directory := os.environ.get("PROJECT_MAP_QA_DIR"):
+                output = Path(directory)
+                output.mkdir(parents=True, exist_ok=True)
+                bar.grab().save(str(output / f"animation-expanded-{theme}.png"))
+            bar.set_collapsed(True)
+            QTest.qWait(65)
+            self.assertEqual(self.window.editor.geometry(), initial_editor_rect)
+            self.assertEqual(bar.geometry(), initial_bar_rect)
+            if directory:
+                bar.grab().save(str(output / f"animation-closing-{theme}.png"))
+            QTest.qWait(130)
+            for _attempt in range(100):
+                if not bar.transitioning:
+                    break
+                QTest.qWait(10)
+            self.assertFalse(bar.transitioning)
+            self.assertEqual(bar.tool_viewport.width(), 0)
+            bar.set_collapsed(False)
+            QTest.qWait(65)
+            self.assertGreater(bar.tool_viewport.width(), 0)
+            if directory:
+                bar.grab().save(str(output / f"animation-opening-{theme}.png"))
+            QTest.qWait(130)
+            self.assertEqual(self.window.editor.geometry(), initial_editor_rect)
+            self.assertEqual(bar.geometry(), initial_bar_rect)
 
 
 if __name__ == "__main__":

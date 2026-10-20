@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
-APP_VERSION = "3.5.0"
+APP_VERSION = "4.2.1"
 
 if getattr(sys, "frozen", False):
     _exe_dir = Path(sys.executable).resolve().parent
-    _adjacent_markdown = _exe_dir / "Markdown"
-    _repository_markdown = _exe_dir.parent / "Markdown"
-    if _adjacent_markdown.exists():
-        APP_DIR = _exe_dir
-    elif _exe_dir.name.casefold() == "dist" and _repository_markdown.exists():
+    if _exe_dir.name.casefold() == "dist":
         APP_DIR = _exe_dir.parent
     else:
         APP_DIR = _exe_dir
 else:
     APP_DIR = Path(__file__).resolve().parent.parent
+
+if _data_root := os.environ.get("PROJECT_MAP_DATA_ROOT"):
+    APP_DIR = Path(_data_root).expanduser().resolve()
 
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 

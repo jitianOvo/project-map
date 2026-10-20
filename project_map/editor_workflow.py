@@ -10,9 +10,9 @@ from .versioning import insert_version, markdown_content_lines, remove_versions
 
 
 PRIORITIES = {
-    "urgent": ("最紧急（红色）", "#dc2626"),
-    "high": ("优先（蓝色）", "#2563eb"),
-    "normal": ("普通（绿色）", "#16a34a"),
+    "urgent": ("紧急", "#dc2626"),
+    "high": ("优先", "#2563eb"),
+    "normal": ("普通", "#16a34a"),
 }
 PRIORITY_SPAN = re.compile(r'<span data-priority="(?:urgent|high|normal)" style="color:#[0-9a-fA-F]{6}">(.*?)</span>')
 NUMBERED = re.compile(r"^([ \t]*)(\d+)\.([ \t]+)(.*)$")
@@ -42,6 +42,8 @@ class EditorWorkflow:
 
     def replace_document(self, text, line=None):
         editor = self.editor
+        if editor.isReadOnly():
+            return
         original = editor.toPlainText()
         if text == original:
             return
@@ -83,6 +85,8 @@ class EditorWorkflow:
 
     def set_priority(self, priority):
         editor = self.editor
+        if editor.isReadOnly():
+            return
         cursor = editor.textCursor()
         if not cursor.hasSelection():
             cursor.select(QTextCursor.BlockUnderCursor)

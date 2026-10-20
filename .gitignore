@@ -16,4 +16,5 @@ dist/*
 
 # 本地开发文件
 .venv/
+.cache/
 *.log
