@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#5b58ee" />
+    <title>项目航图 · 云端</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="compatibility.js" defer></script>
+    <script src="vendor/markdown-it.min.js" defer></script>
+    <script src="vendor/purify.min.js" defer></script>
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <button
+        id="toggleLibrary"
+        title="展开 / 收起项目库"
+        aria-label="展开 / 收起项目库"
+      >
+        ☰</button
+      ><img src="icon.svg" alt="" /><strong>项目航图<span>云端</span></strong
+      ><span class="spacer"></span
+      ><button id="syncButton" title="立即同步">同步</button
+      ><button id="accountButton">登录</button
+      ><button id="settingsButton" aria-label="设置">设置</button>
+    </header>
+    <div class="quick-shell">
+      <button id="quickToggle">快速工具 ▾</button>
+      <nav id="quickTools"></nav>
+    </div>
+    <div id="workspace">
+      <aside id="library" class="panel">
+        <div class="panel-heading">
+          <h2>项目库</h2>
+          <span id="projectCount"></span>
+        </div>
+        <input
+          id="projectSearch"
+          placeholder="搜索项目或内容…"
+          aria-label="搜索项目"
+        />
+        <div class="group-row">
+          <select id="groupFilter" aria-label="项目分组">
+            <option value="">全部项目</option></select
+          ><button id="groupsButton" title="管理分组">分组</button>
+        </div>
+        <div
+          id="projectList"
+          role="listbox"
+          aria-label="项目列表"
+          tabindex="0"
+        ></div>
+        <div class="library-actions">
+          <button id="newButton">＋ 新建</button
+          ><button id="propertiesButton">属性</button
+          ><button id="pinButton">置顶</button
+          ><button id="deleteButton">删除</button>
+        </div>
+        <button id="trashButton" class="text-button">回收站</button>
+      </aside>
+      <main id="main">
+        <div class="document-heading">
+          <h1 id="documentTitle">选择或新建一个项目</h1>
+          <button id="toggleAssistant" title="展开 / 收起辅助面板">
+            辅助面板
+          </button>
+        </div>
+        <div id="editingBanner" class="editing-banner" hidden>
+          <span id="editingMessage"></span>
+          <button id="resumeEditing">继续编辑</button>
+          <button id="endEditing">结束本端编辑</button>
+        </div>
+        <div class="format-shell">
+          <button id="formatToggle">格式工具 ▾</button>
+          <div id="formatReveal"><nav id="formatTools"></nav></div>
+        </div>
+        <div id="findBar" hidden>
+          <div class="find-row">
+            <input
+              id="findText"
+              placeholder="查找内容"
+              aria-label="查找内容"
+            /><button id="findPrev">上一个</button
+            ><button id="findNext">下一个</button
+            ><button id="findClose">关闭</button>
+          </div>
+          <div class="find-row">
+            <input
+              id="replaceText"
+              placeholder="替换为"
+              aria-label="替换为"
+            /><button id="replaceOne">替换</button
+            ><button id="replaceAll">全部替换</button>
+          </div>
+          <div class="find-options">
+            <label><input id="matchCase" type="checkbox" />区分大小写</label
+            ><label><input id="wholeWord" type="checkbox" />全字匹配</label
+            ><span id="findStatus"></span>
+          </div>
+        </div>
+        <div id="panes" data-mode="split">
+          <section id="editPane">
+            <textarea
+              id="editor"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              aria-label="Markdown 编辑器"
+              placeholder="在这里写下项目大纲…"
+              disabled
+            ></textarea>
+          </section>
+          <div id="splitter" title="拖动调整编辑与预览宽度"></div>
+          <section id="previewPane">
+            <div id="preview" tabindex="0" aria-label="Markdown 预览">
+              <article></article>
+            </div>
+          </section>
+          <div id="emptyState">
+            <img src="icon.svg" alt="" />
+            <h2>随时记下，再继续工作</h2>
+            <p>大纲先保存在本机，登录后同步到你的服务器。</p>
+            <button id="emptyNew">新建项目大纲</button>
+          </div>
+        </div>
+        <footer class="editor-footer">
+          <div class="mode-buttons">
+            <button data-mode="edit">编辑</button
+            ><button data-mode="split">分栏</button
+            ><button data-mode="preview">预览</button>
+          </div>
+          <button id="wrapButton">自动换行</button
+          ><button id="zoomButton">编辑 100% · 预览 100%</button>
+        </footer>
+      </main>
+      <aside id="assistant" class="panel">
+        <div class="panel-heading">
+          <h2>辅助面板</h2>
+          <button id="closeAssistant" title="收起辅助面板">›</button>
+        </div>
+        <nav class="assistant-tabs">
+          <button data-tab="outline" class="active">目录</button
+          ><button data-tab="tasks">任务</button
+          ><button data-tab="info">信息</button>
+        </nav>
+        <div id="assistantContent"></div>
+      </aside>
+    </div>
+    <div id="statusBar">
+      <span id="positionStatus">就绪</span><span class="spacer"></span
+      ><span id="syncStatus">本地模式</span>
+    </div>
+    <div id="toast" role="status"></div>
+    <div id="contextMenu" hidden></div>
+    <dialog id="dialog">
+      <form method="dialog" id="dialogForm">
+        <header>
+          <h2 id="dialogTitle"></h2>
+          <button type="button" id="dialogClose" aria-label="关闭">×</button>
+        </header>
+        <div id="dialogContent"></div>
+        <footer>
+          <button type="button" id="dialogCancel">取消</button
+          ><button id="dialogConfirm" class="primary" type="submit">
+            确定
+          </button>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="lightbox">
+      <header>
+        <span>图片查看</span><span class="spacer"></span
+        ><button id="imageZoomOut">−</button
+        ><button id="imageZoomReset">100%</button
+        ><button id="imageZoomIn">＋</button
+        ><button id="imageClose">关闭</button>
+      </header>
+      <div id="imageViewport"><img id="largeImage" alt="图片" /></div>
+    </dialog>
+    <input
+      type="file"
+      id="importInput"
+      accept=".md,.markdown,.json"
+      multiple
+      hidden
+    /><input
+      type="file"
+      id="imageInput"
+      accept="image/png,image/jpeg,image/gif,image/webp"
+      multiple
+      hidden
+    />
+  </body>
+</html>

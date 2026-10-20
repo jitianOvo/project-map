@@ -11,8 +11,9 @@ import test_workflow as workflow
 from PySide6.QtTest import QTest
 from project_map.cloud.api import Api, CloudError
 from project_map.cloud.editing import LeaseApi
+from project_map.locations import cloud_dir
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "项目航图-云端"))
+sys.path.insert(0, str(cloud_dir(Path(__file__).resolve().parents[1])))
 from server.http import CloudServer
 from server.auth import initialize, password_hash
 from project_map.file_io import write_json

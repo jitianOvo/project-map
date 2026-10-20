@@ -8,7 +8,7 @@ from pathlib import Path
 
 WORK_ROOT = Path(r"D:\桌面\Work")
 MAIN_PROJECT = WORK_ROOT / "项目航图"
-CLOUD_PROJECT = WORK_ROOT / "项目航图-云端"
+CLOUD_PROJECT = MAIN_PROJECT / "cloud"
 PRESERVED_EVIDENCE = Path("adb-lease-qa") / "result.json"
 
 FO_DELETE = 3

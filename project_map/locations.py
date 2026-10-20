@@ -7,6 +7,10 @@ from pathlib import Path
 from .file_io import read_json, write_json
 
 
+def cloud_dir(root):
+    return Path(root) / "cloud"
+
+
 def path_identity(path):
     return str(Path(path).resolve(strict=False)).casefold()
 

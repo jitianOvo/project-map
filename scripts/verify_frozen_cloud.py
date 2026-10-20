@@ -12,7 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT.parent / "项目航图-云端"))
+from project_map.locations import cloud_dir
+
+sys.path.insert(0, str(cloud_dir(ROOT)))
 from server.auth import initialize, password_hash
 from server.http import CloudServer
 from project_map.file_io import write_json

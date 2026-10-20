@@ -1,0 +1,23 @@
+[Unit]
+Description=Project Map personal cloud
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/项目航图
+ExecStart=/usr/bin/python3 -m server.main --host 127.0.0.1 --port 18770
+Restart=on-failure
+RestartSec=3
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/项目航图
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=384M
+TasksMax=80
+
+[Install]
+WantedBy=multi-user.target

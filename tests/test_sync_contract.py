@@ -13,10 +13,11 @@ from PySide6.QtTest import QTest
 
 from project_map.cloud.api import Api
 from project_map.file_io import write_json
+from project_map.locations import cloud_dir
 from qt_test_support import APP
 import test_workflow as workflow
 
-SERVICE_SOURCE = Path(__file__).resolve().parents[2] / "项目航图-云端"
+SERVICE_SOURCE = cloud_dir(Path(__file__).resolve().parents[1])
 
 
 @unittest.skipUnless((SERVICE_SOURCE / "server" / "http.py").is_file(), "跨端验证需要同级云服务源码")

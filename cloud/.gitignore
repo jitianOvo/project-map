@@ -1,0 +1,15 @@
+.state/
+.secrets/
+.cache/
+.venv/
+.toolchains/
+runtime/
+__pycache__/
+*.pyc
+*.log
+node_modules/
+dist/
+windows/Markdown/
+windows/Data/
+windows/Media/
+windows/Backups/

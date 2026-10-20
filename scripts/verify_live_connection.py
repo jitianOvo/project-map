@@ -8,10 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from project_map.cloud.api import Api, DEFAULT_ENDPOINT
+from project_map.locations import cloud_dir
 
 
 def main():
-    source = ROOT.parent / "项目航图-云端" / ".secrets" / "云端首次登录.txt"
+    source = cloud_dir(ROOT) / ".secrets" / "云端首次登录.txt"
     info = source.read_text(encoding="utf-8")
     password = re.search(r"密码[:：]\s*(.+)", info).group(1).strip()
     api = Api(DEFAULT_ENDPOINT)

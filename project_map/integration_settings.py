@@ -7,6 +7,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
 from .cloud.api import normalize_endpoint
+from .locations import cloud_dir
 from .menus import RoundedMenu
 
 
@@ -154,7 +155,7 @@ class CloudSettingsPanel(QWidget):
         hint.setWordWrap(True)
         hint.setObjectName("muted")
         layout.addWidget(hint)
-        login_info = window.paths.root.parent / "项目航图-云端" / ".secrets" / "云端首次登录.txt"
+        login_info = cloud_dir(window.paths.root) / ".secrets" / "云端首次登录.txt"
         if login_info.is_file():
             view = QPushButton("打开首次登录信息")
             view.setAutoDefault(False)

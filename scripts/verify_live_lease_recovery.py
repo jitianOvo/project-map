@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from project_map.cloud.api import Api, CloudError, DEFAULT_ENDPOINT
+from project_map.locations import cloud_dir
 
 
 def digest(api):
@@ -24,7 +25,7 @@ def digest(api):
 
 
 def main():
-    secret = (ROOT.parent / "项目航图-云端/.secrets/云端首次登录.txt").read_text(encoding="utf-8")
+    secret = (cloud_dir(ROOT) / ".secrets" / "云端首次登录.txt").read_text(encoding="utf-8")
     password = re.search(r"密码[:：]\s*(.+)", secret).group(1).strip()
     clients, refreshes = [], []
     claims = []

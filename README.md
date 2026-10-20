@@ -173,6 +173,12 @@ pwsh -NoLogo -NoProfile -NonInteractive -File tests/smoke_frozen.ps1
 │   ├── window.py               # 主窗口组装
 │   └── mixins/                 # 界面、项目、预览、格式、面板和操作职责
 │       └── media.py            # 默认与附加图片缓存目录管理
+├── cloud/                       # 安卓客户端、云服务与部署工程
+│   ├── android/                 # 安卓应用与离线资源
+│   ├── server/                  # 云端 API 服务
+│   ├── web/                     # 手机与网页界面
+│   ├── deploy/                  # 服务部署配置
+│   └── tests/                   # 云服务与跨端测试
 ├── 启动项目航图.bat             # Windows 启动脚本
 ├── dist/项目航图.exe            # 可直接运行的当前版本
 ├── assets/                      # 程序图标
