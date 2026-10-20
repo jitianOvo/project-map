@@ -4,7 +4,7 @@ import sys
 import os
 from pathlib import Path
 
-APP_VERSION = "4.2.1"
+APP_VERSION = "4.2.2"
 
 if getattr(sys, "frozen", False):
     _exe_dir = Path(sys.executable).resolve().parent

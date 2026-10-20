@@ -8,8 +8,8 @@ class IntegrationMixin:
         selected = self.paths.with_sources(markdown, media)
         if selected == self.paths:
             return
-        if hasattr(self, "cloud") and (self.cloud.editing.active or self.cloud.editing.pending):
-            raise ValueError("请先结束本端编辑，等保存同步完成后再切换数据目录")
+        if hasattr(self, "cloud") and self.cloud.editing.defer_until_released(lambda: self.change_data_sources(markdown, media)):
+            return
         if hasattr(self, "cloud") and self.cloud.busy:
             raise ValueError("正在同步，请稍后再切换数据目录")
         if not self.flush_auto_save():
@@ -23,6 +23,7 @@ class IntegrationMixin:
         if path_identity(old_paths.markdown) != path_identity(selected.markdown):
             self.metadata = self.load_metadata()
             self.current_path = None
+            self.editor.current_document_path = None
             self.dirty = False
             self.set_project_filter_by_name(self.ALL_GROUPS)
             watched = self.watcher.files() + self.watcher.directories()

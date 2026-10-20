@@ -22,6 +22,55 @@ class IntegratedUiTests(unittest.TestCase):
     setUp = workflow.WindowTests.setUp
     tearDown = workflow.WindowTests.tearDown
 
+    def test_sync_snapshots_follow_loaded_document_not_pending_selection(self):
+        new = self.path.parent / "新建空项目.md"
+        new.write_text("", encoding="utf-8")
+        original = self.window.editor.toPlainText()
+        self.window.current_path = new
+        snapshots = {Path(item["path"]): item for item in self.window.cloud.snapshots()}
+        self.assertEqual(snapshots[new]["document"]["content"], "")
+        self.assertFalse(snapshots[new]["active"])
+        self.assertEqual(snapshots[self.path]["document"]["content"], original)
+        self.assertTrue(snapshots[self.path]["active"])
+
+    def test_save_never_writes_loaded_text_into_pending_project(self):
+        new = self.path.parent / "另一个空项目.md"
+        new.write_text("", encoding="utf-8")
+        self.window.editor.insertPlainText("当前项目的未保存文字")
+        expected = self.window.editor.toPlainText()
+        self.window.current_path = new
+        self.assertTrue(self.window.flush_auto_save())
+        self.assertEqual(new.read_text(encoding="utf-8"), "")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), expected)
+
+    def test_new_project_during_pending_open_keeps_an_empty_own_snapshot(self):
+        from project_map.dialogs import NewProjectDialog
+        from PySide6.QtWidgets import QDialog
+
+        access = self.window.cloud.editing
+        access.pending = True
+        access.active = {"id": "test-pending", "deadline": 0}
+        dialog = NewProjectDialog(self.window)
+        dialog.value.setText("Solar-Kernel")
+        with patch("project_map.mixins.actions.NewProjectDialog", return_value=dialog), patch.object(dialog, "exec", return_value=QDialog.Accepted):
+            self.window.new_file()
+        new = self.path.parent / "Solar-Kernel.md"
+        snapshots = {Path(item["path"]): item for item in self.window.cloud.snapshots()}
+        self.assertEqual(new.read_text(encoding="utf-8"), "")
+        self.assertEqual(snapshots[new]["document"]["content"], "")
+        self.assertEqual(self.window.current_path, self.window.editor.current_document_path)
+        access.pending, access.active = False, None
+
+    def test_delayed_external_reload_cannot_switch_back_to_previous_project(self):
+        other = self.path.parent / "另一个项目.md"
+        other.write_text("另一个项目的正文", encoding="utf-8")
+        self.window.external_file_changed(str(self.path))
+        self.window.load_file(other)
+        QTest.qWait(220)
+        self.assertEqual(self.window.current_path, other)
+        self.assertEqual(self.window.editor.current_document_path, other)
+        self.assertEqual(self.window.editor.toPlainText(), "另一个项目的正文")
+
     def test_settings_add_sources_and_cloud_without_another_settings_button(self):
         dialog = ToolbarSettingsDialog(self.window.settings, self.window.toolbar_catalogs, self.window)
         self.assertEqual([dialog.tabs.tabText(i) for i in range(dialog.tabs.count())], ["快速工具", "格式工具", "数据目录", "云同步", "使用说明"])

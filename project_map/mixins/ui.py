@@ -129,6 +129,7 @@ class UiMixin:
         self.file_list.delete_requested.connect(self.delete_file)
         self.file_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_list.customContextMenuRequested.connect(self.show_project_context_menu)
+        self.file_list.itemClicked.connect(lambda item: self.select_file(item, None))
         left_layout.addWidget(self.file_list, 1)
         buttons = QHBoxLayout()
         for label, handler in (("＋ 新建", self.new_file), ("项目属性", self.edit_project)):

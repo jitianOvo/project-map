@@ -156,6 +156,9 @@ class PanelsMixin:
         self.editor_wrap_action.setChecked(not self.editor_wrap_action.isChecked())
 
     def eventFilter(self, watched, event):
+        if watched in (self.editor, self.editor.viewport()) and event.type() in (QEvent.FocusIn, QEvent.MouseButtonPress):
+            if hasattr(self, "cloud") and self.editor.isReadOnly():
+                self.cloud.editing.activate()
         if event.type() == QEvent.Wheel and event.modifiers() & Qt.ControlModifier:
             editor_targets = (self.editor, self.editor.viewport())
             preview_targets = (self.preview, self.preview.viewport())

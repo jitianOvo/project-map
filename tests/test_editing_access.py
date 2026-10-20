@@ -63,6 +63,85 @@ class EditingAccessTests(unittest.TestCase):
         self.worker.join(timeout=3)
         self.service.server_close()
 
+    def test_new_project_while_syncing_does_not_publish_previous_text(self):
+        from project_map.dialogs import NewProjectDialog
+        from PySide6.QtWidgets import QDialog
+
+        window, access = self.window, self.window.cloud.editing
+        original = window.editor.toPlainText()
+        window.cloud.busy = True
+        access.request_open(self.path, force=True, quiet=True)
+        dialog = NewProjectDialog(window)
+        dialog.value.setText("Solar-Kernel")
+        with patch("project_map.mixins.actions.NewProjectDialog", return_value=dialog), patch.object(dialog, "exec", return_value=QDialog.Accepted):
+            window.new_file()
+        new = self.path.parent / "Solar-Kernel.md"
+        window.cloud.busy = False
+        self.wait(lambda: window.current_path == new and not access.pending and not window.cloud.busy)
+        self.assertEqual(window.editor.toPlainText(), "")
+        self.assertEqual(window.editor.current_document_path, new)
+        self.assertEqual(new.read_text(encoding="utf-8"), "")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), original)
+        identifier = window.project_meta(new)["cloud_id"]
+        documents = {item["id"]: item for item in self.service.storage.changes(0)["documents"]}
+        self.assertEqual(documents[identifier]["content"], "")
+        self.assertEqual(access.active["id"], identifier)
+
+    def test_rapid_switches_open_latest_choice_and_keep_documents_separate(self):
+        from PySide6.QtCore import Qt
+
+        window, access = self.window, self.window.cloud.editing
+        paths = [self.path.parent / "项目B.md", self.path.parent / "项目C.md"]
+        for index, path in enumerate(paths):
+            path.write_text(f"独立正文 {index}", encoding="utf-8")
+        window.refresh_files()
+        window.cloud.synchronize(force=True)
+        self.wait(lambda: not window.cloud.busy and all(window.project_meta(path).get("cloud_id") for path in paths))
+        window.cloud.busy = True
+        for path in (*paths, paths[0]):
+            item = next(window.file_list.item(i) for i in range(window.file_list.count()) if Path(window.file_list.item(i).data(Qt.UserRole)) == path)
+            window.select_file(item, None)
+        window.cloud.busy = False
+        self.wait(lambda: window.current_path == paths[0] and not access.pending and not window.cloud.busy)
+        QTest.qWait(250)
+        self.wait(lambda: not access.pending and not window.cloud.busy)
+        self.assertEqual(window.current_path, paths[0])
+        self.assertEqual(window.editor.toPlainText(), "独立正文 0")
+        self.assertEqual(paths[0].read_text(encoding="utf-8"), "独立正文 0")
+        self.assertEqual(paths[1].read_text(encoding="utf-8"), "独立正文 1")
+        self.assertEqual(access.active["id"], window.project_meta(paths[0])["cloud_id"])
+
+    def test_pause_sync_automatically_hands_off_without_manual_end(self):
+        access = self.window.cloud.editing
+        self.window.cloud.save_config(enabled=False)
+        self.wait(lambda: not access.pending and not self.window.cloud.config["enabled"])
+        self.assertIsNone(access.active)
+        self.assertFalse(self.window.editor.isReadOnly())
+
+    def test_wrong_document_response_cannot_replace_loaded_project(self):
+        import uuid
+
+        access = self.window.cloud.editing
+        original = self.window.editor.toPlainText()
+        access.target, access.previous, access.pending = self.path, self.path, True
+        access.opened({"error": None, "value": {"id": str(uuid.uuid4()), "document": {"content": "不相关文档"}}})
+        self.assertEqual(self.window.editor.toPlainText(), original)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), original)
+        self.assertTrue(self.notices.called)
+
+    def test_clicking_editor_automatically_resumes_without_start_button(self):
+        from PySide6.QtCore import Qt
+
+        access = self.window.cloud.editing
+        self.assertFalse(self.window.editing_banner.isVisible())
+        access.end_editing()
+        self.wait(lambda: not access.pending and access.active is None)
+        QTest.mouseClick(self.window.editor.viewport(), Qt.LeftButton)
+        self.wait(lambda: access.writable() and not access.pending and not self.window.editor.isReadOnly())
+        self.assertFalse(self.window.editing_banner.isVisible())
+        self.assertFalse(self.window.editing_resume.isVisible())
+        self.assertFalse(self.window.editing_release.isVisible())
+
     def test_other_client_blocked_and_handoff_loads_latest(self):
         import uuid
         identifier = self.window.cloud.editing.active["id"]

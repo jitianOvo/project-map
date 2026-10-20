@@ -40,8 +40,10 @@ class ActionsMixin:
         box.exec()
 
     def save_file(self, _checked=False, *, create_backup=True, quiet=False):
-        if not self.current_path:
+        path = self.loaded_project_path()
+        if not path:
             return False
+        self.current_path = path
         cursor = self.editor.textCursor()
         cursor_position = cursor.position()
         cursor_anchor = cursor.anchor()
@@ -49,10 +51,10 @@ class ActionsMixin:
         vertical = self.editor.verticalScrollBar().value()
         self.save_guard = True
         try:
-            if create_backup and self.current_path.exists():
+            if create_backup and path.exists():
                 stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-                shutil.copy2(self.current_path, self.paths.backups / f"{self.current_path.stem}_{stamp}.md.bak")
-            atomic_write(self.current_path, self.editor.toPlainText().encode("utf-8"))
+                shutil.copy2(path, self.paths.backups / f"{path.stem}_{stamp}.md.bak")
+            atomic_write(path, self.editor.toPlainText().encode("utf-8"))
         except OSError as error:
             self.save_guard = False
             self.statusBar().showMessage(f"保存失败：{error}")
@@ -72,7 +74,7 @@ class ActionsMixin:
         return True
 
     def auto_save_file(self):
-        if self.loading or not self.dirty or not self.current_path:
+        if self.loading or not self.dirty or not self.loaded_project_path():
             return True
         return self.save_file(create_backup=False, quiet=True)
 
@@ -100,7 +102,7 @@ class ActionsMixin:
         if path.exists():
             self.show_notice("文件已存在", "这个名称已经被使用，请换一个名称。")
             return
-        path.write_text("# 新项目大纲\n\n## 待办事项\n\n- [ ] ", encoding="utf-8")
+        path.write_text("", encoding="utf-8")
         group = self.active_project_group()
         self.metadata[self.project_key(path)] = {
             "display_name": path.stem,
@@ -111,8 +113,7 @@ class ActionsMixin:
             "order": self.next_project_order(False),
         }
         self.save_metadata()
-        self.current_path = path
-        self.refresh_files()
+        self.refresh_files(path)
 
     def edit_project(self):
         if not self.current_path:
@@ -136,8 +137,7 @@ class ActionsMixin:
         path = Path(source).resolve()
         for existing in self.all_project_paths():
             if self.same_path(existing, path):
-                self.current_path = existing
-                self.refresh_files()
+                self.refresh_files(existing)
                 self.statusBar().showMessage(f"项目已经在项目库中：{path.name}")
                 return
         key = self.external_project_key(path)
@@ -151,8 +151,7 @@ class ActionsMixin:
             "order": self.next_project_order(False),
         }
         self.save_metadata()
-        self.current_path = path
-        self.refresh_files()
+        self.refresh_files(path)
         self.statusBar().showMessage(f"已链接外部项目：{path}")
 
     def delete_file(self):
@@ -207,7 +206,10 @@ class ActionsMixin:
             result = f"已移入备份：{display_name}"
         self.metadata.pop(key, None)
         self.save_metadata()
-        self.current_path = None
+        if self.same_path(path, self.loaded_project_path()):
+            self.current_path = None
+            self.editor.current_document_path = None
+            self.dirty = False
         self.refresh_files()
         self.statusBar().showMessage(result)
 
@@ -416,7 +418,7 @@ class ActionsMixin:
                 self.watcher.addPath(str(path))
             return
         if self.same_path(path, self.current_path) and not self.dirty and path.exists():
-            QTimer.singleShot(150, self, lambda: self.load_file(path))
+            QTimer.singleShot(150, self, lambda: self.load_file(path) if self.same_path(path, self.loaded_project_path()) else None)
         else:
             self.refresh_files()
 

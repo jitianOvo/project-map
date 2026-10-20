@@ -80,8 +80,6 @@ class DataSourcesPanel(QWidget):
                    or Path(self.media.text()).resolve() != self.window.paths.media.resolve())
         if changed and self.window.cloud.busy:
             raise ValueError("正在同步，请稍后再切换目录")
-        if changed and (self.window.cloud.editing.active or self.window.cloud.editing.pending):
-            raise ValueError("请先点击“结束本端编辑”，等保存同步完成后再切换目录")
 
 
 class CloudSettingsPanel(QWidget):

@@ -54,6 +54,8 @@ class EditorAccess(QObject):
         self.active = None
         self.pending = False
         self.target = None
+        self.queued_path = None
+        self.after_release = []
         self.previous = None
         self.bypass = False
         self.closing_ready = False
@@ -94,14 +96,21 @@ class EditorAccess(QObject):
         self.window.editor.setReadOnly(not allowed)
         for action in self.window.toolbar_catalogs["format"][1].values():
             action.setEnabled(allowed)
-        self.window.editing_label.setText(message)
-        self.window.editing_banner.setVisible(bool(message))
-        self.window.editing_resume.setVisible(not allowed and not self.pending)
-        self.window.editing_release.setVisible(allowed and bool(self.active))
+        self.window.editing_label.setText(message if not allowed else "")
+        self.window.editing_banner.setVisible(bool(message) and not allowed)
+        self.window.editing_resume.hide()
+        self.window.editing_release.hide()
 
     def request_open(self, path, force=False, quiet=False):
         if self.bypass or self.closing_ready:
             return False
+        loaded = self.window.loaded_project_path()
+        if loaded:
+            self.window.current_path = loaded
+        if self.pending:
+            if path and (force or not self.window.same_path(path, loaded)):
+                self.queued_path = None if self.window.same_path(path, self.target) else Path(path)
+            return True
         if self.paused and not force and self.window.same_path(path, self.window.current_path):
             return False
         identifier = self.managed_id(path)
@@ -112,8 +121,6 @@ class EditorAccess(QObject):
             return False
         if not force and self.active and self.active["id"] == identifier and self.writable() and not self.pending:
             return False
-        if self.pending:
-            return True
         self.previous = getattr(self.window.editor, "current_document_path", None)
         if self.previous:
             self.window.current_path = self.previous
@@ -195,6 +202,9 @@ class EditorAccess(QObject):
             self.fail(str(result["error"]), keep_current=getattr(result["error"], "status", 0) == 423)
             return
         lease = result["value"]
+        if lease and lease["id"] != self.managed_id(self.target):
+            self.fail("收到的云端大纲与待打开项目不一致，已停止载入并保留本机内容。")
+            return
         self.heartbeat = lease.get("heartbeat_in", 5) if lease else 5
         with self.lock:
             self.active = ({"id": lease["id"], "client_id": self.client, "lease_token": lease["lease_token"],
@@ -218,7 +228,8 @@ class EditorAccess(QObject):
                 raise CloudError("加载期间编辑占用已到期，请联网后重新打开。")
             if self.release_only:
                 self.paused = True
-                self.set_access(False, "本端已结束编辑；另一端现在可以打开。继续时请重新取得占用。")
+                if not self.close_after and not self.deactivate_after:
+                    self.released()
             else:
                 self.set_access(True, "正在本端编辑 · 另一端暂不能打开此大纲" if self.active else "")
             if self.close_after:
@@ -233,6 +244,12 @@ class EditorAccess(QObject):
             self.bypass = False
             self.release_only = False
             self.close_after = False
+            self.open_queued()
+
+    def open_queued(self):
+        path, self.queued_path = self.queued_path, None
+        if path and path.exists() and not self.closing_ready and not self.cloud.closing:
+            QTimer.singleShot(0, self, lambda: self.request_open(path, force=True, quiet=True))
 
     def fail(self, message, keep_current=False):
         self.blocked_path = self.target
@@ -262,6 +279,7 @@ class EditorAccess(QObject):
             self.finish_close(close=False)
         elif not self.quiet:
             self.window.show_notice("这份大纲暂时不能打开", message)
+        self.open_queued()
 
     def finish_close(self, close=True):
         self.paused = True
@@ -284,13 +302,32 @@ class EditorAccess(QObject):
 
     def released(self):
         self.pending = False
-        self.set_access(False, "本端已结束编辑；未同步内容仍保存在本机，联网后可继续同步。")
-        if self.resume_after and not self.window.isMinimized():
+        self.set_access(False, "编辑已自动交接 · 点击项目或编辑区即可继续")
+        callbacks, self.after_release = self.after_release, []
+        if callbacks:
+            self.resume_after = False
+            QTimer.singleShot(0, self, lambda: self.apply_after_release(callbacks))
+        elif self.resume_after and not self.window.isMinimized():
             self.resume_after = False
             self.request_open(self.window.current_path, force=True, quiet=True)
 
+    def defer_until_released(self, callback):
+        if not self.active and not self.pending:
+            return False
+        self.after_release.append(callback)
+        self.end_editing()
+        return True
+
+    def apply_after_release(self, callbacks):
+        for callback in callbacks:
+            try:
+                callback()
+            except (OSError, ValueError) as error:
+                self.window.show_notice("设置暂未应用", str(error))
+
     def end_editing(self, close=False):
         self.retry_path = None
+        self.queued_path = None
         if not close:
             self.paused = True
             if self.pending:
@@ -314,7 +351,7 @@ class EditorAccess(QObject):
             return
         if not self.writable() and not self.window.editor.isReadOnly():
             self.window.flush_auto_save()
-            self.set_access(False, "连接中断或占用已失效 · 内容已保存在本机，请联网后继续")
+            self.set_access(False, "连接中断或占用已失效 · 内容已保存在本机，恢复后自动继续")
         if not self.writable() and not self.pending and not self.paused:
             self.retry_path = self.window.current_path
             self.retry_at = now + 2
@@ -344,7 +381,7 @@ class EditorAccess(QObject):
         if error:
             self.active["deadline"] = 0
             self.window.flush_auto_save()
-            self.set_access(False, "编辑占用续期失败 · 已输入内容保留在本机，请联网后点击继续")
+            self.set_access(False, "编辑占用续期失败 · 内容保留在本机，正在自动恢复")
             if not self.paused:
                 self.retry_path = self.window.current_path
                 self.retry_at = time.monotonic() + 2
@@ -355,8 +392,11 @@ class EditorAccess(QObject):
                 self.set_access(True, "正在本端编辑 · 另一端暂不能打开此大纲")
 
     def activate(self):
-        if self.managed_id(self.window.current_path) and not self.blocked_path and not self.paused:
-            self.request_open(self.window.current_path, force=True, quiet=True)
+        path = self.window.loaded_project_path()
+        if self.managed_id(path) and not self.pending and not self.window.isMinimized():
+            if not self.paused and self.writable():
+                return
+            self.request_open(path, force=True, quiet=True)
 
     def shutdown(self):
         self.timer.stop()

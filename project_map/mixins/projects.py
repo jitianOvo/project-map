@@ -42,6 +42,10 @@ class ProjectsMixin:
     def same_path(self, first, second):
         return bool(first and second and self.normalized_path(first) == self.normalized_path(second))
 
+    def loaded_project_path(self):
+        path = getattr(self.editor, "current_document_path", None)
+        return Path(path) if path else None
+
     def is_local_project(self, path):
         return self.normalized_path(Path(path).parent) == self.normalized_path(self.paths.markdown)
 
@@ -256,10 +260,10 @@ class ProjectsMixin:
         self.refresh_files()
         self.statusBar().showMessage(f"已将“{self.display_name(path)}”归入“{group}”")
 
-    def refresh_files(self):
+    def refresh_files(self, selected_path=None):
         if self.current_path:
             self.save_project_view_state(self.current_path)
-        selected = str(self.current_path or self.settings.value("last_file", ""))
+        selected = str(selected_path or self.current_path or self.settings.value("last_file", ""))
         self.refresh_groups()
         files = self.files()
         self.file_list.blockSignals(True)
@@ -308,9 +312,10 @@ class ProjectsMixin:
             target_path = None
         self.file_list.blockSignals(False)
         if target_path:
-            self.load_file(target_path)
+            self.load_file(target_path, user_selected=selected_path is not None)
         elif not files:
             self.current_path = None
+            self.editor.current_document_path = None
             self.file_title.setText("请选择左侧项目")
             self.loading = True
             self.editor.clear()
@@ -333,8 +338,8 @@ class ProjectsMixin:
             return
         target = Path(current.data(Qt.UserRole))
         if self.same_path(target, self.current_path):
-            if hasattr(self, "cloud") and self.editor.isReadOnly():
-                self.cloud.editing.request_open(target, force=True)
+            if hasattr(self, "cloud") and (self.editor.isReadOnly() or self.cloud.editing.pending):
+                self.cloud.editing.request_open(target, force=True, quiet=True)
             self.update_pin_button()
             return
         if self.current_path:
@@ -343,7 +348,7 @@ class ProjectsMixin:
             self.flush_auto_save()
         if self.maybe_save():
             self.save_metadata()
-            self.load_file(target)
+            self.load_file(target, user_selected=True)
         elif self.current_path:
             self.file_list.blockSignals(True)
             for index in range(self.file_list.count()):
@@ -564,9 +569,12 @@ class ProjectsMixin:
         else:
             self.restoring_path = None
 
-    def load_file(self, path):
+    def load_file(self, path, *, user_selected=False):
         path = Path(path)
-        if hasattr(self, "cloud") and self.cloud.editing.request_open(path):
+        loaded = self.loaded_project_path()
+        if loaded and not self.same_path(path, loaded) and not self.flush_auto_save():
+            return
+        if hasattr(self, "cloud") and self.cloud.editing.request_open(path, force=user_selected):
             return
         try:
             content = path.read_text(encoding="utf-8")
@@ -579,6 +587,7 @@ class ProjectsMixin:
         duplicates = [item for item in self.all_project_paths() if self.display_name(item).casefold() == display_name.casefold()]
         caption = f"{display_name}  ·  {path.resolve(strict=False).parent}" if len(duplicates) > 1 else display_name
         if self.same_path(path, getattr(self.editor, "current_document_path", None)) and (self.dirty or self.editor.toPlainText() == content):
+            self.current_path = path
             self.file_title.setText(caption + (" *" if self.dirty else ""))
             self.file_title.setToolTip(str(path.resolve(strict=False)))
             self.update_sidebar()

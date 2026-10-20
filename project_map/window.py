@@ -61,6 +61,8 @@ class MainWindow(UiMixin, ProjectsMixin, PreviewMixin, FormattingMixin, Toolbars
 
     def changeEvent(self, event):
         super().changeEvent(event)
+        if event.type() == QEvent.ActivationChange and self.isActiveWindow() and hasattr(self, "cloud"):
+            self.cloud.editing.activate()
         if event.type() == QEvent.WindowStateChange and hasattr(self, "cloud"):
             if self.isMinimized():
                 self.cloud.editing.end_editing()

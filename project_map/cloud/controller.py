@@ -102,8 +102,9 @@ class CloudController(QObject):
             write_json(self.auth_path, {})
 
     def save_config(self, *, endpoint=None, enabled=None, include_external=None, auto_login=None):
-        if self.editing.active and (enabled is False or (endpoint is not None and normalize_endpoint(endpoint) != self.config["endpoint"])):
-            raise ValueError("请先点击“结束本端编辑”，等保存同步完成后再暂停同步或切换服务器。")
+        if enabled is False or (endpoint is not None and normalize_endpoint(endpoint) != self.config["endpoint"]):
+            if self.editing.defer_until_released(lambda: self.save_config(endpoint=endpoint, enabled=enabled, include_external=include_external, auto_login=auto_login)):
+                return
         if endpoint is not None:
             endpoint = normalize_endpoint(endpoint)
             if endpoint != self.config["endpoint"]:
@@ -172,8 +173,7 @@ class CloudController(QObject):
         self.run_job("login", connect)
 
     def logout(self):
-        if self.editing.active or self.editing.pending:
-            self.window.show_notice("请先结束本端编辑", "先点击大纲上方的“结束本端编辑”，等保存同步完成后再退出云账号。")
+        if self.editing.defer_until_released(self.logout):
             return
         if self.busy:
             self.set_status("正在同步，请稍后退出云账号")
@@ -192,7 +192,7 @@ class CloudController(QObject):
         paths = sorted(self.window.all_project_paths(), key=self.window.project_sort_key)
         for index, path in enumerate(paths):
             meta = self.window.project_meta(path)
-            if self.window.same_path(path, self.window.current_path):
+            if self.window.same_path(path, self.window.loaded_project_path()):
                 text = self.window.editor.toPlainText()
             else:
                 stat = path.stat()
@@ -205,7 +205,7 @@ class CloudController(QObject):
                 text = cached[1]
             result.append({
                 "path": str(path), "external": not self.window.is_local_project(path),
-                "active": self.window.same_path(path, self.window.current_path),
+                "active": self.window.same_path(path, self.window.loaded_project_path()),
                 "cloud_id": meta.get("cloud_id"), "cloud_endpoint": meta.get("cloud_endpoint"),
                 "document": payload({
                     "content": text, "title": self.window.display_name(path), "group": meta.get("group", "默认项目"),
@@ -244,7 +244,7 @@ class CloudController(QObject):
         if not path.exists():
             return {**fallback, "deleted": True}
         meta = self.window.project_meta(path)
-        content = self.window.editor.toPlainText() if self.window.same_path(path, self.window.current_path) else path.read_text(encoding="utf-8-sig")
+        content = self.window.editor.toPlainText() if self.window.same_path(path, self.window.loaded_project_path()) else path.read_text(encoding="utf-8-sig")
         content, _images = self.engine.assets.cloud_content(content, path)
         return payload({**fallback, "content": content, "title": self.window.display_name(path),
                         "group": meta.get("group", "默认项目"), "description": meta.get("description", ""),
@@ -285,7 +285,7 @@ class CloudController(QObject):
             raise OSError("本地保存失败，云变更暂未应用")
         done = []
         changed = False
-        active = window.current_path
+        active = window.loaded_project_path()
         window.save_project_view_state()
         try:
             for identifier, update in result["applications"].items():
