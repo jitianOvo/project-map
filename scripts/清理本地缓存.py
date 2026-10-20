@@ -34,7 +34,10 @@ class SHFileOperation(ctypes.Structure):
 
 
 def is_reparse_point(path: Path) -> bool:
-    attributes = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+    get_attributes = ctypes.windll.kernel32.GetFileAttributesW
+    get_attributes.argtypes = [wintypes.LPCWSTR]
+    get_attributes.restype = wintypes.DWORD
+    attributes = get_attributes(str(path))
     return (
         attributes != INVALID_FILE_ATTRIBUTES
         and bool(attributes & FILE_ATTRIBUTE_REPARSE_POINT)
