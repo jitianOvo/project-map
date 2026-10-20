@@ -153,8 +153,42 @@ def recycle(path: Path) -> None:
     shell32.SHFileOperationW.argtypes = [ctypes.POINTER(SHFileOperation)]
     shell32.SHFileOperationW.restype = ctypes.c_int
     result = shell32.SHFileOperationW(ctypes.byref(operation))
-    if result != 0 or operation.fAnyOperationsAborted:
-        raise OSError(result, "Windows 未能将此项目移入回收站", str(path))
+    if result != 0:
+        raise OSError(f"Windows 回收站接口返回错误 {result}")
+    if operation.fAnyOperationsAborted:
+        raise OSError("Windows 中止了回收操作")
+
+
+def recycle_recursively(path: Path, root: Path) -> list[tuple[Path, str]]:
+    if not path.exists():
+        return []
+    if not is_inside(path, root):
+        return [(path, "目标路径不在允许的项目目录内")]
+    if is_reparse_point(path):
+        return [(path, "目标是链接或联接目录，已跳过")]
+
+    try:
+        recycle(path)
+        return []
+    except OSError as error:
+        if not path.is_dir():
+            return [(path, str(error))]
+
+    try:
+        children = sorted(path.iterdir(), key=lambda item: item.name.casefold())
+    except OSError as error:
+        return [(path, str(error))]
+
+    failures: list[tuple[Path, str]] = []
+    for child in children:
+        failures.extend(recycle_recursively(child, root))
+
+    if not failures:
+        try:
+            path.rmdir()
+        except OSError as error:
+            failures.append((path, str(error)))
+    return failures
 
 
 def main() -> int:
@@ -195,22 +229,26 @@ def main() -> int:
     for target, root in sorted(
         targets.items(), key=lambda pair: len(pair[0].parts), reverse=True
     ):
-        try:
-            if not target.exists():
-                continue
-            if not is_inside(target, root):
-                raise ValueError("目标路径不在允许的项目目录内")
-            if tree_has_reparse_point(target):
-                raise ValueError("目标内含符号链接或目录联接，已跳过")
-            recycle(target)
-            print(f"已移入回收站：{target}")
-        except (OSError, ValueError) as error:
-            failures.append((target, str(error)))
-            print(f"清理失败：{target}；{error}")
+        if not target.exists():
+            continue
+        if not is_inside(target, root):
+            failures.append((target, "目标路径不在允许的项目目录内"))
+            continue
+        if tree_has_reparse_point(target):
+            failures.append((target, "目标内含符号链接或目录联接，已跳过"))
+            continue
+
+        target_failures = recycle_recursively(target, root)
+        if target_failures:
+            failures.extend(target_failures)
+            for failed_path, reason in target_failures:
+                print(f"清理失败：{failed_path}；{reason}")
+        else:
+            print(f"已清理并移入回收站：{target}")
 
     if failures:
         print(f"完成时有 {len(failures)} 项未清理；失败项仍保留在原位置。")
-        print("可右键以管理员身份运行此脚本后重试。")
+        print("请按上方完整路径检查文件占用和访问权限；管理员权限未必能解决。")
         result = 1
     else:
         print("清理完成；项目已进入回收站，可恢复。")
